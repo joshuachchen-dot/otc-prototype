@@ -3,6 +3,7 @@
     "private": true,
     "packageManager": "pnpm@9.6.0",
     "scripts": {
+      "dev:all": "bash start.sh",
       "dev:anvil": "anvil -p 8545",
       "dev:contracts": "cd contracts && forge build && forge test",
       "dev:api": "pnpm --filter @ots/api dev",

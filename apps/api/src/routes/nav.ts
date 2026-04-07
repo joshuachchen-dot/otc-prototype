@@ -4,19 +4,29 @@ import { nav } from '../chain';
 
 export default async function (app: FastifyInstance) {
   app.get('/nav/latest', async (_req, reply) => {
-    const c = nav as any;
-    const [navBn, asOfBn, storedAtBn] = await c.read.latestNAV(); // <-- destructure
-    return reply.send({
-      nav: navBn.toString(),
-      asOf: asOfBn.toString(),
-      storedAt: storedAtBn.toString(),
-    });
+    try {
+      const [navBn, asOfBn, storedAtBn] = await nav.read.latestNAV();
+      return reply.send({
+        nav: navBn.toString(),
+        asOf: asOfBn.toString(),
+        storedAt: storedAtBn.toString(),
+      });
+    } catch (err: any) {
+      reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Failed to read NAV' });
+    }
   });
 
   app.post('/nav/post', async (req, reply) => {
-    const body = z.object({ nav: z.string(), asOf: z.number() }).parse(req.body);
-    const c = nav as any;
-    const txHash = await c.write.postNAV([BigInt(body.nav), BigInt(body.asOf)]);
-    return reply.send({ tx: txHash });
+    try {
+      const body = z.object({
+        nav: z.string().regex(/^\d+$/, 'nav must be a non-negative integer string'),
+        asOf: z.number().int().positive(),
+      }).parse(req.body);
+      const txHash = await nav.write.postNAV([BigInt(body.nav), BigInt(body.asOf)]);
+      return reply.send({ tx: txHash });
+    } catch (err: any) {
+      if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
+      reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Failed to post NAV' });
+    }
   });
 }

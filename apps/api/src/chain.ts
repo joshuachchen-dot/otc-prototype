@@ -17,8 +17,7 @@ export const wallet = createWalletClient({
   transport: http(ENV.RPC_URL),
 });
 
-// ---- remove the overcomplicated typing; cast clients to any ----
-const clients = { public: rpc as any, wallet: wallet as any };
+const client = { public: rpc, wallet };
 
 // NAV contract
 export const nav = getContract({
@@ -26,8 +25,9 @@ export const nav = getContract({
   abi: parseAbi([
     'function postNAV(uint256 nav, uint256 asOf) external',
     'function latestNAV() view returns (uint256 nav, uint256 asOf, uint256 storedAt)',
+    'event NavPosted(uint256 nav, uint256 asOf, uint256 storedAt, address indexed by)',
   ]),
-  client: clients as any,
+  client,
 });
 
 // Token contract
@@ -38,6 +38,23 @@ export const token = getContract({
     'function burnFrom(address from, uint256 amount) external',
     'function balanceOf(address a) view returns (uint256)',
     'function setWhitelisted(address a, bool ok) external',
+    'event Transfer(address indexed from, address indexed to, uint256 value)',
   ]),
-  client: clients as any,
+  client,
+});
+
+// OTCTrade contract
+export const otcTrade = getContract({
+  address: ENV.OTC_TRADE_ADDRESS as `0x${string}`,
+  abi: parseAbi([
+    'function propose(address seller, address buyer, uint256 amount, uint256 navFloor) external returns (uint256)',
+    'function settle(uint256 id) external',
+    'function cancel(uint256 id, string reason) external',
+    'function getTrade(uint256 id) view returns (address seller, address buyer, uint256 amount, uint256 navFloor, uint8 status)',
+    'function tradeCount() view returns (uint256)',
+    'event TradeProposed(uint256 indexed id, address indexed seller, address indexed buyer, uint256 amount, uint256 navFloor)',
+    'event TradeSettled(uint256 indexed id, uint256 navAtSettlement, address seller, address buyer, uint256 amount)',
+    'event TradeCancelled(uint256 indexed id, string reason)',
+  ]),
+  client,
 });

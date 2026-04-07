@@ -16,6 +16,7 @@ const EnvSchema = z.object({
     .regex(/^0x[0-9a-fA-F]{64}$/, "Invalid private key"),
   FUND_TOKEN_ADDRESS: z.string().refine(isAddress, "Invalid address"),
   NAV_REGISTRY_ADDRESS: z.string().refine(isAddress, "Invalid address"),
+  OTC_TRADE_ADDRESS: z.string().refine(isAddress, "Invalid address"),
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().optional(),
 });
@@ -32,6 +33,7 @@ export const ENV = {
   ...raw,
   FUND_TOKEN_ADDRESS: getAddress(raw.FUND_TOKEN_ADDRESS),
   NAV_REGISTRY_ADDRESS: getAddress(raw.NAV_REGISTRY_ADDRESS),
+  OTC_TRADE_ADDRESS: getAddress(raw.OTC_TRADE_ADDRESS),
 };
 
 /**
@@ -42,5 +44,6 @@ console.log("ENV LOADED:", {
   PRIVATE_KEY: ENV.PRIVATE_KEY.slice(0, 10) + "...",
   FUND_TOKEN_ADDRESS: ENV.FUND_TOKEN_ADDRESS,
   NAV_REGISTRY_ADDRESS: ENV.NAV_REGISTRY_ADDRESS,
+  OTC_TRADE_ADDRESS: ENV.OTC_TRADE_ADDRESS,
   PORT: ENV.PORT,
 });

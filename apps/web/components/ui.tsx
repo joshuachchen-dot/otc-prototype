@@ -4,9 +4,9 @@ export function Container({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto max-w-4xl px-4 py-8">{children}</div>;
 }
 
-export function Card({ children }: { children: React.ReactNode }) {
+export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-2xl bg-white shadow-soft ring-1 ring-black/5">
+    <div className={`rounded-2xl bg-white shadow-soft ring-1 ring-black/5 ${className}`}>
       <div className="p-5">{children}</div>
     </div>
   );
@@ -33,7 +33,7 @@ export function Button(
   return <button className={`${base} ${styles} ${className}`} {...rest} />;
 }
 
-export function Badge({ tone, children }:{tone:"green"|"yellow"|"red", children:React.ReactNode}) {
+export function Badge({ tone, children }: { tone: "green" | "yellow" | "red"; children: React.ReactNode }) {
   const map = {
     green: "bg-green-100 text-green-700",
     yellow: "bg-yellow-100 text-yellow-800",
@@ -42,7 +42,7 @@ export function Badge({ tone, children }:{tone:"green"|"yellow"|"red", children:
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${map[tone]}`}>{children}</span>;
 }
 
-export function Field({ label, value }:{label:string; value:React.ReactNode}) {
+export function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-1.5 text-sm">
       <span className="text-gray-500">{label}</span>

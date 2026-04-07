@@ -3,8 +3,11 @@ import { useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { Badge, Button, Card, Container, Field, H1, H2 } from "@/components/ui";
 
+// Default to Anvil account #1 (pre-funded test address)
+const DEFAULT_ADDR = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
 export default function Investor() {
-  const [addr, setAddr] = useState<string>("0x000…0001");
+  const [addr, setAddr] = useState<string>(DEFAULT_ADDR);
   const [risk, setRisk] = useState<"green" | "yellow" | "red">("green");
   const [balance, setBalance] = useState<string>("0");
   const [amount, setAmount] = useState("1000000000000000000"); // 1e18
@@ -14,28 +17,26 @@ export default function Investor() {
 
   async function refresh() {
     try {
-      const r = await fetch(API("/health")); // cheap ping
-      r.ok && setAddr("0x0000000000000000000000000000000000000001");
-
       const riskRes = await fetch(API("/risk"));
       if (riskRes.ok) {
-        const { risk: tone } = await riskRes.json();
-        setRisk((tone as any) ?? "green");
+        const { status } = await riskRes.json();
+        setRisk((status as "green" | "yellow" | "red") ?? "green");
       }
 
-      const balRes = await fetch(
-        API("/token/balance/0x0000000000000000000000000000000000000001")
-      );
-      if (balRes.ok) {
-        const { balance: b } = await balRes.json();
-        setBalance(String(b));
+      if (addr) {
+        const balRes = await fetch(API(`/token/balance/${addr}`));
+        if (balRes.ok) {
+          const { balance: b } = await balRes.json();
+          setBalance(String(b));
+        }
       }
-    } catch (e) {
+    } catch {
       setMsg({ type: "err", text: "API not reachable. Is @ots/api running on :3001?" });
     }
   }
 
   async function subscribe() {
+    if (!addr) return setMsg({ type: "err", text: "Enter a wallet address first." });
     setBusy(true);
     setMsg({ type: "info", text: "Submitting subscription..." });
 
@@ -43,11 +44,16 @@ export default function Investor() {
       const res = await fetch(API("/token/subscribe"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amount: amount }),
+        body: JSON.stringify({ to: addr, amount }),
       });
 
-      await refresh();
-      setMsg(res.ok ? { type: "ok", text: "Subscribed (minted fund tokens)." } : { type: "err", text: "Subscription failed." });
+      const data = await res.json();
+      if (res.ok) {
+        await refresh();
+        setMsg({ type: "ok", text: `Subscribed. Tx: ${data.tx}` });
+      } else {
+        setMsg({ type: "err", text: `Subscription failed: ${JSON.stringify(data.error)}` });
+      }
     } catch {
       setMsg({ type: "err", text: "Subscription failed (network/API error)." });
     } finally {
@@ -56,6 +62,7 @@ export default function Investor() {
   }
 
   async function redeem() {
+    if (!addr) return setMsg({ type: "err", text: "Enter a wallet address first." });
     setBusy(true);
     setMsg({ type: "info", text: "Submitting redemption..." });
 
@@ -63,11 +70,16 @@ export default function Investor() {
       const res = await fetch(API("/token/redeem"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amount: amount }),
+        body: JSON.stringify({ from: addr, amount }),
       });
 
-      await refresh();
-      setMsg(res.ok ? { type: "ok", text: "Redeemed (burned fund tokens)." } : { type: "err", text: "Redeem failed." });
+      const data = await res.json();
+      if (res.ok) {
+        await refresh();
+        setMsg({ type: "ok", text: `Redeemed. Tx: ${data.tx}` });
+      } else {
+        setMsg({ type: "err", text: `Redeem failed: ${JSON.stringify(data.error)}` });
+      }
     } catch {
       setMsg({ type: "err", text: "Redeem failed (network/API error)." });
     } finally {
@@ -77,7 +89,8 @@ export default function Investor() {
 
   useEffect(() => {
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addr]);
 
   const msgStyle =
     msg?.type === "ok"
@@ -114,60 +127,73 @@ export default function Investor() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Account card */}
-        <Card className="lg:col-span-1">
-          <H2>Account</H2>
-          <div className="space-y-2">
-            <Field label="Address" value={<code>{addr}</code>} />
-            <Field label="Risk" value={<Badge tone={risk}>{risk}</Badge>} />
-            <Field label="Balance" value={balance} />
-          </div>
+        <div className="lg:col-span-1">
+          <Card>
+            <H2>Account</H2>
+            <div className="space-y-2">
+              <Field label="Risk" value={<Badge tone={risk}>{risk}</Badge>} />
+              <Field label="Balance (wei)" value={<code className="text-xs break-all">{balance}</code>} />
+            </div>
 
-          <div className="mt-4">
-            <Button variant="ghost" onClick={refresh} disabled={busy}>
-              Refresh
-            </Button>
-          </div>
-        </Card>
-
-        {/* Action card */}
-        <Card className="lg:col-span-2">
-          <H2>Subscribe / Redeem</H2>
-          <p className="text-sm text-gray-600">
-            Amount is in <b>wei</b> (1e18 = 1 token unit in this prototype).
-          </p>
-
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="w-full">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Amount
-              </label>
+            <div className="mt-4 space-y-2">
+              <label className="block text-xs font-medium text-gray-600">Wallet Address</label>
               <input
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-600/30"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 1000000000000000000"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500/30"
+                value={addr}
+                onChange={(e) => setAddr(e.target.value)}
+                placeholder="0x..."
               />
             </div>
 
-            <div className="flex gap-2">
-              <Button onClick={subscribe} disabled={busy}>
-                {busy ? "Working..." : "Mint (subscribe)"}
-              </Button>
-              <Button variant="ghost" onClick={redeem} disabled={busy}>
-                {busy ? "Working..." : "Burn (redeem)"}
+            <div className="mt-3">
+              <Button variant="ghost" onClick={refresh} disabled={busy}>
+                Refresh
               </Button>
             </div>
-          </div>
+          </Card>
+        </div>
 
-          <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-            <div className="font-semibold mb-1">What happens when you click?</div>
-            <ul className="list-disc pl-5 space-y-1">
-              <li><b>Mint</b>: API calls your FundToken subscribe endpoint → contract mints tokens</li>
-              <li><b>Burn</b>: API calls redeem endpoint → contract burns tokens</li>
-              <li>Balance refresh reads on-chain balance and displays it here</li>
-            </ul>
-          </div>
-        </Card>
+        {/* Action card */}
+        <div className="lg:col-span-2">
+          <Card>
+            <H2>Subscribe / Redeem</H2>
+            <p className="text-sm text-gray-600">
+              Amount is in <b>wei</b> (1e18 = 1 token unit in this prototype).
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="w-full">
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Amount (wei)
+                </label>
+                <input
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="e.g. 1000000000000000000"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={subscribe} disabled={busy}>
+                  {busy ? "Working..." : "Mint (subscribe)"}
+                </Button>
+                <Button variant="ghost" onClick={redeem} disabled={busy}>
+                  {busy ? "Working..." : "Burn (redeem)"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+              <div className="font-semibold mb-1">What happens when you click?</div>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><b>Mint</b>: API sends <code>{`{ to: addr, amount }`}</code> → FundToken.mint() on-chain</li>
+                <li><b>Burn</b>: API sends <code>{`{ from: addr, amount }`}</code> → FundToken.burnFrom() on-chain</li>
+                <li>Balance refresh reads on-chain balanceOf for the address above</li>
+              </ul>
+            </div>
+          </Card>
+        </div>
       </div>
     </Container>
   );
