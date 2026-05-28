@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { API } from "@/lib/api";
+import { API, apiFetch } from "@/lib/api";
 import { Badge, Button, Card, Container, Field, H1, H2 } from "@/components/ui";
 
 // Default to Anvil account #1 (pre-funded test address)
@@ -41,7 +41,7 @@ export default function Investor() {
     setMsg({ type: "info", text: "Submitting subscription..." });
 
     try {
-      const res = await fetch(API("/token/subscribe"), {
+      const res = await apiFetch("/token/subscribe", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ to: addr, amount }),
@@ -67,7 +67,7 @@ export default function Investor() {
     setMsg({ type: "info", text: "Submitting redemption..." });
 
     try {
-      const res = await fetch(API("/token/redeem"), {
+      const res = await apiFetch("/token/redeem", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ from: addr, amount }),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API } from "@/lib/api";
+import { API, apiFetch } from "@/lib/api";
 import { Button, Card, Container, Field, H1, H2 } from "@/components/ui";
 
 export default function Manager() {
@@ -13,7 +13,7 @@ export default function Manager() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch(API("/nav/post"), {
+      const res = await apiFetch("/nav/post", {
         method: "POST",
         headers: {"content-type":"application/json"},
         body: JSON.stringify({ nav, asOf: Number(asOf) }),

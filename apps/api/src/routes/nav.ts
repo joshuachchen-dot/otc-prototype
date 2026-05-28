@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { nav } from '../chain';
+import { nav } from '../chain.js';
+import { requireApiKey } from '../middleware/auth.js';
 
 export default async function (app: FastifyInstance) {
   app.get('/nav/latest', async (_req, reply) => {
@@ -16,7 +17,7 @@ export default async function (app: FastifyInstance) {
     }
   });
 
-  app.post('/nav/post', async (req, reply) => {
+  app.post('/nav/post', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
         nav: z.string().regex(/^\d+$/, 'nav must be a non-negative integer string'),
