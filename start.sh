@@ -9,8 +9,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANVIL_URL="http://127.0.0.1:8545"
 DEPLOYER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-# Dev-only API key — replace with a strong secret in any deployed environment
-DEV_API_KEY="dev-local-key-replace-in-production"
+# Dev-only API key — randomly generated each run; never a committed static secret
+DEV_API_KEY="dev-$(openssl rand -hex 12)"
 
 # OTC test accounts (Anvil pre-funded accounts #1 and #2)
 SELLER_ADDR="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"

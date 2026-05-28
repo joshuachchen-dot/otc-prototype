@@ -48,10 +48,10 @@ contract FundTokenTest is Test {
         assertEq(token.balanceOf(alice), 3 * ONE_TOKEN);
     }
 
-    /// Minting to an un-whitelisted address must revert.
-    function testMint_RevertsForNonWhitelistedRecipient() public {
-        vm.expectRevert("INVESTOR_NOT_ELIGIBLE");
+    /// Minting to an un-whitelisted address is permitted — whitelist only governs p2p transfers.
+    function testMint_AllowsNonWhitelistedRecipient() public {
         token.mint(bob, ONE_TOKEN);
+        assertEq(token.balanceOf(bob), ONE_TOKEN, "mint to non-whitelisted should succeed");
     }
 
     /// Only SUBSCRIPTION_ROLE may call mint.

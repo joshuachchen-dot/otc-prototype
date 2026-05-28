@@ -119,7 +119,6 @@ export default async function (app: FastifyInstance) {
 
       const { scenario, seller, buyer } = body;
       const results: string[] = [];
-      const TRADE_AMOUNT = 500n * 10n ** 18n;
 
       if (scenario === 1) {
         const mintTx = await token.write.mint([seller as `0x${string}`, 1000n * 10n ** 18n]);
@@ -138,7 +137,6 @@ export default async function (app: FastifyInstance) {
         results.push(`Posted NAV = $1,500 (tx: ${navTx}) — below navFloor of $2,000`);
       }
 
-      void TRADE_AMOUNT; // used in propose step handled by the UI
       return { scenario, steps: results };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });

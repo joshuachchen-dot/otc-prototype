@@ -25,9 +25,11 @@ contract NAVRegistryTest is Test {
         vm.prank(admin);
         nav = new NAVRegistry(admin);
 
-        // Grant MANAGER_ROLE to a separate manager account
-        vm.prank(admin);
+        // Grant MANAGER_ROLE to a separate manager account.
+        // Use startPrank so the role-getter call doesn't consume the single-use prank.
+        vm.startPrank(admin);
         nav.grantRole(nav.MANAGER_ROLE(), manager);
+        vm.stopPrank();
     }
 
     /* ═══════════════════════ SINGLE POST + READ ════════════════════════ */
@@ -122,8 +124,9 @@ contract NAVRegistryTest is Test {
 
     /// Admin can revoke MANAGER_ROLE; the ex-manager then cannot post.
     function testAccess_RevokedManagerCannotPost() public {
-        vm.prank(admin);
+        vm.startPrank(admin);
         nav.revokeRole(nav.MANAGER_ROLE(), manager);
+        vm.stopPrank();
 
         vm.prank(manager);
         vm.expectRevert();
