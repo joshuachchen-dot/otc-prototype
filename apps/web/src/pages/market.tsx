@@ -99,7 +99,7 @@ export default function Market() {
             Market Prices
           </h1>
           <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
-            Live data via CoinGecko · auto-refreshes every 30 s
+            Live data via CoinGecko · auto-refreshes every 60 s
           </p>
         </div>
         {lastRefresh && (
@@ -139,7 +139,7 @@ export default function Market() {
             marginBottom: 16,
           }}
         >
-          ⚠ Showing cached prices — CoinGecko unreachable, retrying in 30 s
+          ⚠ Showing cached prices — CoinGecko unreachable, retrying in 60 s
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+import Link from "next/link";
 import type { AppProps } from "next/app";
 
 const NAV_LINKS = [
@@ -30,7 +31,7 @@ export default function App({ Component, pageProps }: AppProps) {
           </div>
           <nav style={{ display: "flex", gap: 8 }}>
             {NAV_LINKS.map(({ href, label }) => (
-              <a
+              <Link
                 key={href}
                 href={href}
                 style={{
@@ -45,7 +46,7 @@ export default function App({ Component, pageProps }: AppProps) {
                 }}
               >
                 {label}
-              </a>
+              </Link>
             ))}
           </nav>
         </div>

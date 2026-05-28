@@ -6,15 +6,30 @@ export default function Manager() {
   const [nav, setNav] = useState("123456789");
   const [asOf, setAsOf] = useState(String(Math.floor(Date.now()/1000)));
   const [latest, setLatest] = useState<{nav:string; asOf:string; storedAt:string}|null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   async function postNAV() {
-    const res = await fetch(API("/nav/post"), {
-      method: "POST",
-      headers: {"content-type":"application/json"},
-      body: JSON.stringify({ nav, asOf: Number(asOf) }),
-    });
-    if (!res.ok) alert("post failed");
-    await load();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(API("/nav/post"), {
+        method: "POST",
+        headers: {"content-type":"application/json"},
+        body: JSON.stringify({ nav, asOf: Number(asOf) }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await load();
+        setMsg({ type: "ok", text: `NAV posted. Tx: ${data.tx}` });
+      } else {
+        setMsg({ type: "err", text: `Post failed: ${JSON.stringify(data.error)}` });
+      }
+    } catch {
+      setMsg({ type: "err", text: "Post failed (network/API error)." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function load() {
@@ -28,6 +43,16 @@ export default function Manager() {
     <Container>
       <H1>Manager Console</H1>
 
+      {msg && (
+        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+          msg.type === "ok"
+            ? "bg-green-50 text-green-800 border-green-200"
+            : "bg-red-50 text-red-800 border-red-200"
+        }`}>
+          {msg.text}
+        </div>
+      )}
+
       <div className="grid gap-6">
         <Card>
           <H2>Post NAV</H2>
@@ -36,7 +61,7 @@ export default function Manager() {
                    value={nav} onChange={e=>setNav(e.target.value)} />
             <input className="w-full rounded-xl border px-3 py-2 text-sm"
                    value={asOf} onChange={e=>setAsOf(e.target.value)} />
-            <Button onClick={postNAV}>Post NAV</Button>
+            <Button onClick={postNAV} disabled={busy}>{busy ? "Posting…" : "Post NAV"}</Button>
           </div>
         </Card>
 
