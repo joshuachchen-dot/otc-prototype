@@ -23,6 +23,7 @@ export default {
       },
     ],
   },
+  setupFiles: ['./jest.setup.ts'],
   testMatch: ['**/test/**/*.test.ts'],
   // Each test file gets its own module registry so mocks don't leak between files
   resetModules: true,
