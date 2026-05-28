@@ -1,6 +1,6 @@
 # Enterprise Governance Report
 > Generated: 2026-05-28 UTC  
-> Project: OTC Fund Prototype — `/Users/joshuachen/Desktop/Aiotek/otc-prototype_final`
+> Project: OTC Fund Prototype — `otc-prototype`
 
 ---
 
