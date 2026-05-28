@@ -36,7 +36,7 @@ app.setErrorHandler((err, _req, reply) => {
   reply.code(statusCode).send({ error: err.message ?? 'Internal server error' });
 });
 
-await app.listen({ port: ENV.PORT, host: '127.0.0.1' });
+await app.listen({ port: ENV.PORT, host: process.env.HOST ?? '0.0.0.0' });
 
 // Start autonomous NAV scheduler after server is listening
 startNavScheduler((msg) => app.log.info(msg));

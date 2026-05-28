@@ -1,27 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import {AccessControl} from "openzeppelin/access/AccessControl.sol";
 import {FundToken} from "./FundToken.sol";
 import {NAVRegistry} from "./NAVRegistry.sol";
 
 /**
- * OTCTrade — bilateral OTC trade contract.
+ * OTCTrade — bilateral OTC trade contract with role-based access control.
  *
- * A proposer (acting on behalf of a seller) registers trade terms on-chain.
- * Anyone can attempt settlement; the contract enforces two conditions atomically:
+ * Only addresses holding SETTLEMENT_AGENT_ROLE may propose or settle trades.
+ * This prevents arbitrary third parties from registering trades against any
+ * seller/buyer or forcing settlement without authorization.
  *
- *   Sell-side: seller must hold >= amount tokens at settlement time.
- *   Buy-side:  the latest on-chain NAV must be >= navFloor set in the trade.
+ * Phase 1: settlement agent attests off-chain seller consent before proposing.
+ * Phase 2: replace with on-chain EIP-712 seller signature in propose().
  *
- * On success the contract burns tokens from the seller and mints them to the
- * buyer, using the REDEMPTION_ROLE and SUBSCRIPTION_ROLE it holds on FundToken.
- *
- * Three outcomes are possible:
+ * Three settlement outcomes are possible:
  *   1. Both conditions met   → Trade.status = Settled
  *   2. Seller lacks tokens   → revert "SELLER_INSUFFICIENT_BALANCE"
  *   3. NAV below floor       → revert "NAV_BELOW_FLOOR"
  */
-contract OTCTrade {
+contract OTCTrade is AccessControl {
+    bytes32 public constant SETTLEMENT_AGENT_ROLE = keccak256("SETTLEMENT_AGENT_ROLE");
+
     // ── Types ───────────────────────────────────────────────────────────────
     enum Status { Pending, Settled, Cancelled }
 
@@ -63,31 +64,27 @@ contract OTCTrade {
     constructor(address _token, address _navRegistry) {
         token       = FundToken(_token);
         navRegistry = NAVRegistry(_navRegistry);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(SETTLEMENT_AGENT_ROLE, msg.sender);
     }
 
     // ── Propose ─────────────────────────────────────────────────────────────
     /**
-     * Register a new trade proposal. The caller acts as settlement agent and
-     * specifies explicit seller/buyer addresses.
-     *
-     * @param seller    Address that will give up tokens.
-     * @param buyer     Address that will receive tokens.
-     * @param amount    Number of OTCF token units to transfer.
-     * @param navFloor  Minimum NAV value (scaled ×1e6) required at settlement.
-     *                  Represents the buy-side credit condition: if NAV is
-     *                  below this value, the buyer is considered unable to
-     *                  meet the trade terms.
+     * Register a new trade proposal. Restricted to SETTLEMENT_AGENT_ROLE.
+     * The agent is responsible for obtaining and recording off-chain seller
+     * consent before calling this function (Phase 1). On-chain EIP-712
+     * seller signature verification will be added in Phase 2.
      */
     function propose(
         address seller,
         address buyer,
         uint256 amount,
         uint256 navFloor
-    ) external returns (uint256 id) {
-        require(amount > 0,               "ZERO_AMOUNT");
-        require(seller != address(0),     "INVALID_SELLER");
-        require(buyer  != address(0),     "INVALID_BUYER");
-        require(buyer  != seller,         "SAME_COUNTERPARTY");
+    ) external onlyRole(SETTLEMENT_AGENT_ROLE) returns (uint256 id) {
+        require(amount > 0,           "ZERO_AMOUNT");
+        require(seller != address(0), "INVALID_SELLER");
+        require(buyer  != address(0), "INVALID_BUYER");
+        require(buyer  != seller,     "SAME_COUNTERPARTY");
 
         id = tradeCount++;
         trades[id] = Trade({
@@ -103,7 +100,7 @@ contract OTCTrade {
 
     // ── Settle ──────────────────────────────────────────────────────────────
     /**
-     * Attempt to settle a pending trade.
+     * Attempt to settle a pending trade. Restricted to SETTLEMENT_AGENT_ROLE.
      *
      * Enforces both conditions atomically:
      *  1. Sell-side: seller balance >= amount        (SELLER_INSUFFICIENT_BALANCE)
@@ -111,41 +108,39 @@ contract OTCTrade {
      *
      * On success: burns tokens from seller and mints to buyer.
      */
-    function settle(uint256 id) external {
+    function settle(uint256 id) external onlyRole(SETTLEMENT_AGENT_ROLE) {
         Trade storage t = trades[id];
         require(t.status == Status.Pending, "NOT_PENDING");
 
-        // ── Sell-side condition ──────────────────────────────────────────────
-        // Scenario 2 fails here: seller doesn't hold enough tokens
         require(
             token.balanceOf(t.seller) >= t.amount,
             "SELLER_INSUFFICIENT_BALANCE"
         );
 
-        // ── Buy-side condition ───────────────────────────────────────────────
-        // Scenario 3 fails here: NAV is below the floor set in trade terms
         NAVRegistry.NavRecord memory nav = navRegistry.latestNAV();
         require(nav.nav >= t.navFloor, "NAV_BELOW_FLOOR");
 
-        // ── Settlement ───────────────────────────────────────────────────────
-        // Scenario 1 reaches here: both conditions satisfied
+        // State update before external calls (checks-effects-interactions)
         t.status = Status.Settled;
 
-        token.burnFrom(t.seller, t.amount);   // requires REDEMPTION_ROLE
-        token.mint(t.buyer,   t.amount);      // requires SUBSCRIPTION_ROLE
+        token.burnFrom(t.seller, t.amount);
+        token.mint(t.buyer,   t.amount);
 
         emit TradeSettled(id, nav.nav, t.seller, t.buyer, t.amount);
     }
 
     // ── Cancel ───────────────────────────────────────────────────────────────
     /**
-     * Cancel a pending trade. Only callable by seller or buyer.
+     * Cancel a pending trade. Callable by the seller, buyer, or any
+     * settlement agent — so either counterparty or the platform can cancel.
      */
     function cancel(uint256 id, string calldata reason) external {
         Trade storage t = trades[id];
         require(t.status == Status.Pending, "NOT_PENDING");
         require(
-            msg.sender == t.seller || msg.sender == t.buyer,
+            msg.sender == t.seller ||
+            msg.sender == t.buyer  ||
+            hasRole(SETTLEMENT_AGENT_ROLE, msg.sender),
             "UNAUTHORIZED"
         );
 

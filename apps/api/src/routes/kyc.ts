@@ -1,10 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAddress } from 'viem';
-import { db } from '../db/client';
+import { db } from '../db/client.js';
+import { requireApiKey } from '../middleware/auth.js';
 
 export default async function (app: FastifyInstance) {
-  app.post('/kyc/mark-eligible', async (req, reply) => {
+  app.post('/kyc/mark-eligible', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
         address: z.string().refine(isAddress, 'Invalid Ethereum address'),
