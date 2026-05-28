@@ -16,9 +16,10 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 
-# foundry deps (don’t commit)
-contracts/lib/
-contracts/.gitmodules
+# foundry build artifacts only — lib/ submodules ARE committed
+contracts/out/
+contracts/cache/
+contracts/broadcast/
 
 .DS_Store
 /next
