@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API } from "@/lib/api";
+import { API, apiFetch } from "@/lib/api";
 
 // Anvil pre-funded accounts used as test counterparties
 const SELLER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Anvil #1
@@ -171,7 +171,7 @@ export default function OTCPage() {
 
     try {
       // Step 1: Setup chain state (mint tokens + post NAV)
-      const setupRes = await fetch(API("/otc/setup-scenario"), {
+      const setupRes = await apiFetch("/otc/setup-scenario", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ scenario: s.id, seller: SELLER, buyer: BUYER }),
@@ -184,7 +184,7 @@ export default function OTCPage() {
       }
 
       // Step 2: Propose the trade
-      const proposeRes = await fetch(API("/otc/propose"), {
+      const proposeRes = await apiFetch("/otc/propose", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -205,7 +205,7 @@ export default function OTCPage() {
       });
 
       // Step 3: Attempt settlement
-      const settleRes = await fetch(API("/otc/settle"), {
+      const settleRes = await apiFetch("/otc/settle", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: tradeId }),

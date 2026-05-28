@@ -1,12 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAddress } from 'viem';
-import { otcTrade, token, nav } from '../chain';
+import { otcTrade, token, nav } from '../chain.js';
+import { requireApiKey } from '../middleware/auth.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema  = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
 
-// Status enum mirror (matches OTCTrade.sol enum order)
 const STATUS_LABELS = ['Pending', 'Settled', 'Cancelled'] as const;
 
 function formatTrade(raw: readonly [string, string, bigint, bigint, number]) {
@@ -25,8 +25,7 @@ export default async function (app: FastifyInstance) {
   app.get('/otc/trade/:id', async (req, reply) => {
     try {
       const { id } = req.params as { id: string };
-      const idNum = BigInt(id);
-      const raw = await otcTrade.read.getTrade([idNum]);
+      const raw = await otcTrade.read.getTrade([BigInt(id)]);
       return formatTrade(raw);
     } catch (err: any) {
       reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Lookup failed' });
@@ -49,8 +48,7 @@ export default async function (app: FastifyInstance) {
   });
 
   // ── POST /otc/propose ──────────────────────────────────────────────────────
-  // Body: { seller, buyer, amount, navFloor }
-  app.post('/otc/propose', async (req, reply) => {
+  app.post('/otc/propose', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
         seller:   addressSchema,
@@ -66,7 +64,6 @@ export default async function (app: FastifyInstance) {
         BigInt(body.navFloor),
       ]);
 
-      // Read back the new trade id (tradeCount - 1)
       const count = await otcTrade.read.tradeCount();
       const id = Number(count) - 1;
       return { tx, id };
@@ -77,10 +74,7 @@ export default async function (app: FastifyInstance) {
   });
 
   // ── POST /otc/settle ───────────────────────────────────────────────────────
-  // Body: { id }
-  // Returns 200 with tx on success.
-  // Returns 409 with the on-chain revert reason on condition failure.
-  app.post('/otc/settle', async (req, reply) => {
+  app.post('/otc/settle', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const { id } = z.object({ id: z.number().int().nonnegative() }).parse(req.body);
       const tx = await otcTrade.write.settle([BigInt(id)]);
@@ -88,8 +82,6 @@ export default async function (app: FastifyInstance) {
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
 
-      // Extract the on-chain revert reason so the UI can show exactly which
-      // condition failed (SELLER_INSUFFICIENT_BALANCE or NAV_BELOW_FLOOR)
       const reason: string =
         err.cause?.reason ??
         err.shortMessage ??
@@ -101,8 +93,7 @@ export default async function (app: FastifyInstance) {
   });
 
   // ── POST /otc/cancel ───────────────────────────────────────────────────────
-  // Body: { id, reason? }
-  app.post('/otc/cancel', async (req, reply) => {
+  app.post('/otc/cancel', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
         id:     z.number().int().nonnegative(),
@@ -118,10 +109,7 @@ export default async function (app: FastifyInstance) {
   });
 
   // ── POST /otc/setup-scenario ───────────────────────────────────────────────
-  // Convenience endpoint: mint tokens to seller and post a specific NAV so the
-  // UI can set up each of the 3 test scenarios with one click.
-  // Body: { scenario: 1 | 2 | 3, seller, buyer }
-  app.post('/otc/setup-scenario', async (req, reply) => {
+  app.post('/otc/setup-scenario', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
         scenario: z.literal(1).or(z.literal(2)).or(z.literal(3)),
@@ -132,45 +120,20 @@ export default async function (app: FastifyInstance) {
       const { scenario, seller, buyer } = body;
       const results: string[] = [];
 
-      // Trade amount used in all scenarios: 500 OTCF (500 * 1e18)
-      const TRADE_AMOUNT = 500n * 10n ** 18n;
-
       if (scenario === 1) {
-        // Scenario 1: SUCCESS
-        // Seller receives 1000 OTCF (well above trade amount)
-        // NAV posted at $3,000 (above navFloor of $2,000)
         const mintTx = await token.write.mint([seller as `0x${string}`, 1000n * 10n ** 18n]);
         results.push(`Minted 1000 OTCF to seller (tx: ${mintTx})`);
-
-        const navTx = await nav.write.postNAV([
-          3_000_000_000n,                          // $3,000 × 1e6
-          BigInt(Math.floor(Date.now() / 1000)),
-        ]);
+        const navTx = await nav.write.postNAV([3_000_000_000n, BigInt(Math.floor(Date.now() / 1000))]);
         results.push(`Posted NAV = $3,000 (tx: ${navTx})`);
-
       } else if (scenario === 2) {
-        // Scenario 2: SELL-SIDE FAIL — seller has too few tokens
-        // Mint only 100 OTCF to seller (below trade amount of 500)
         const mintTx = await token.write.mint([seller as `0x${string}`, 100n * 10n ** 18n]);
         results.push(`Minted 100 OTCF to seller (tx: ${mintTx}) — below trade amount of 500`);
-
-        const navTx = await nav.write.postNAV([
-          3_000_000_000n,
-          BigInt(Math.floor(Date.now() / 1000)),
-        ]);
+        const navTx = await nav.write.postNAV([3_000_000_000n, BigInt(Math.floor(Date.now() / 1000))]);
         results.push(`Posted NAV = $3,000 (tx: ${navTx}) — NAV is fine, sell-side will fail`);
-
       } else {
-        // Scenario 3: BUY-SIDE FAIL — NAV below floor
-        // Seller has enough tokens (1000 OTCF)
         const mintTx = await token.write.mint([seller as `0x${string}`, 1000n * 10n ** 18n]);
         results.push(`Minted 1000 OTCF to seller (tx: ${mintTx})`);
-
-        // Post NAV at $1,500 (below navFloor of $2,000)
-        const navTx = await nav.write.postNAV([
-          1_500_000_000n,                          // $1,500 × 1e6
-          BigInt(Math.floor(Date.now() / 1000)),
-        ]);
+        const navTx = await nav.write.postNAV([1_500_000_000n, BigInt(Math.floor(Date.now() / 1000))]);
         results.push(`Posted NAV = $1,500 (tx: ${navTx}) — below navFloor of $2,000`);
       }
 

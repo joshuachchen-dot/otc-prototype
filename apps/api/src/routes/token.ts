@@ -1,13 +1,14 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAddress } from 'viem';
-import { token } from '../chain';
+import { token } from '../chain.js';
+import { requireApiKey } from '../middleware/auth.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
 
 export default async function (app: FastifyInstance) {
-  app.post('/token/subscribe', async (req, reply) => {
+  app.post('/token/subscribe', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({ to: addressSchema, amount: amountSchema }).parse(req.body);
       const tx = await token.write.mint([body.to as `0x${string}`, BigInt(body.amount)]);
@@ -18,7 +19,7 @@ export default async function (app: FastifyInstance) {
     }
   });
 
-  app.post('/token/redeem', async (req, reply) => {
+  app.post('/token/redeem', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({ from: addressSchema, amount: amountSchema }).parse(req.body);
       const tx = await token.write.burnFrom([body.from as `0x${string}`, BigInt(body.amount)]);

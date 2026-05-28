@@ -9,6 +9,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANVIL_URL="http://127.0.0.1:8545"
 DEPLOYER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+# Dev-only API key — randomly generated each run; never a committed static secret
+DEV_API_KEY="dev-$(openssl rand -hex 12)"
 
 # OTC test accounts (Anvil pre-funded accounts #1 and #2)
 SELLER_ADDR="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
@@ -46,8 +48,7 @@ DEPLOY_OUT=$(
   DEPLOYER="$DEPLOYER" forge script script/Deploy.s.sol \
     --rpc-url "$ANVIL_URL" \
     --private-key "$PRIVATE_KEY" \
-    --broadcast \
-    --quiet 2>&1
+    --broadcast 2>&1
 )
 
 # Parse deployed addresses from forge output
@@ -59,7 +60,12 @@ echo "   FundToken:   $FUND_TOKEN_ADDRESS"
 echo "   NAVRegistry: $NAV_REGISTRY_ADDRESS"
 echo "   OTCTrade:    $OTC_TRADE_ADDRESS"
 
-# Write addresses to API .env
+# Validate parsed addresses are non-empty before proceeding
+[ -z "$FUND_TOKEN_ADDRESS" ]   && { echo "ERROR: FundToken address not parsed from deploy output"; exit 1; }
+[ -z "$NAV_REGISTRY_ADDRESS" ] && { echo "ERROR: NAVRegistry address not parsed from deploy output"; exit 1; }
+[ -z "$OTC_TRADE_ADDRESS" ]    && { echo "ERROR: OTCTrade address not parsed from deploy output"; exit 1; }
+
+# Write addresses and dev API key to API .env
 cat > "$ROOT/apps/api/.env" <<EOF
 RPC_URL=http://127.0.0.1:8545
 PRIVATE_KEY=$PRIVATE_KEY
@@ -67,6 +73,13 @@ FUND_TOKEN_ADDRESS=$FUND_TOKEN_ADDRESS
 NAV_REGISTRY_ADDRESS=$NAV_REGISTRY_ADDRESS
 OTC_TRADE_ADDRESS=$OTC_TRADE_ADDRESS
 PORT=3001
+API_KEY=$DEV_API_KEY
+EOF
+
+# Write API base URL and key to web .env.local for Next.js
+cat > "$ROOT/apps/web/.env.local" <<EOF
+NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_API_KEY=$DEV_API_KEY
 EOF
 
 echo "   .env updated"

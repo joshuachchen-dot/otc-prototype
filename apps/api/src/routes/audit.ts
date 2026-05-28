@@ -1,21 +1,20 @@
 import { FastifyInstance } from 'fastify';
 import { parseAbiItem } from 'viem';
-import { rpc } from '../chain';
-import { ENV } from '../env';
+import { rpc } from '../chain.js';
+import { ENV } from '../env.js';
+import { requireApiKey } from '../middleware/auth.js';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export default async function (app: FastifyInstance) {
-  app.get('/audit/export', async (_req, reply) => {
+  app.get('/audit/export', { preHandler: requireApiKey }, async (_req, reply) => {
     try {
-      // Fetch NAVPosted events from NAVRegistry contract
       const navLogs = await rpc.getLogs({
         address: ENV.NAV_REGISTRY_ADDRESS,
         event: parseAbiItem('event NavPosted(uint256 nav, uint256 asOf, uint256 storedAt, address indexed by)'),
         fromBlock: 0n,
       });
 
-      // Fetch Transfer events from FundToken (mint = from zero, burn = to zero)
       const transferLogs = await rpc.getLogs({
         address: ENV.FUND_TOKEN_ADDRESS,
         event: parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)'),
@@ -57,7 +56,6 @@ export default async function (app: FastifyInstance) {
         }
       }
 
-      // Sort by block number ascending
       rows.sort((a, b) => (a.blockNumber < b.blockNumber ? -1 : a.blockNumber > b.blockNumber ? 1 : 0));
 
       const header = 'type,blockNumber,ts,details';

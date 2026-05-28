@@ -19,6 +19,9 @@ const EnvSchema = z.object({
   OTC_TRADE_ADDRESS: z.string().refine(isAddress, "Invalid address"),
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().optional(),
+  // When set, all mutating and sensitive API routes require X-Api-Key header.
+  // Leave unset in local dev; always set in any deployed environment.
+  API_KEY: z.string().min(16).optional(),
 });
 
 /**

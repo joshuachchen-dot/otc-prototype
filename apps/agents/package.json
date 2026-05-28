@@ -1,0 +1,15 @@
+{
+  "name": "@ots/agents",
+  "type": "module",
+  "scripts": {
+    "governance": "tsx src/orchestrator.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.19",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
