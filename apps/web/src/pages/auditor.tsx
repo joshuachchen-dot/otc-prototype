@@ -4,6 +4,7 @@ import { Button, Card, Container, H1 } from "@/components/ui";
 
 export default function Auditor() {
   function download() {
+    // Intentional: triggers a browser file download rather than client-side navigation
     window.location.href = API("/audit/export");
   }
   return (

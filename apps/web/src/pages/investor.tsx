@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { Badge, Button, Card, Container, Field, H1, H2 } from "@/components/ui";
 
@@ -15,7 +15,7 @@ export default function Investor() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err" | "info"; text: string } | null>(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     try {
       const riskRes = await fetch(API("/risk"));
       if (riskRes.ok) {
@@ -33,7 +33,7 @@ export default function Investor() {
     } catch {
       setMsg({ type: "err", text: "API not reachable. Is @ots/api running on :3001?" });
     }
-  }
+  }, [addr]);
 
   async function subscribe() {
     if (!addr) return setMsg({ type: "err", text: "Enter a wallet address first." });
@@ -89,8 +89,7 @@ export default function Investor() {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addr]);
+  }, [refresh]);
 
   const msgStyle =
     msg?.type === "ok"

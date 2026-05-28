@@ -57,11 +57,21 @@ export default function Manager() {
         <Card>
           <H2>Post NAV</H2>
           <div className="flex flex-col items-start gap-3 sm:flex-row">
-            <input className="w-full rounded-xl border px-3 py-2 text-sm"
-                   value={nav} onChange={e=>setNav(e.target.value)} />
-            <input className="w-full rounded-xl border px-3 py-2 text-sm"
-                   value={asOf} onChange={e=>setAsOf(e.target.value)} />
-            <Button onClick={postNAV} disabled={busy}>{busy ? "Posting…" : "Post NAV"}</Button>
+            <div className="w-full">
+              <label className="mb-1 block text-xs font-medium text-gray-600">NAV (integer, scaled × 1e6)</label>
+              <input className="w-full rounded-xl border px-3 py-2 text-sm"
+                     placeholder="e.g. 2000000000"
+                     value={nav} onChange={e=>setNav(e.target.value)} />
+            </div>
+            <div className="w-full">
+              <label className="mb-1 block text-xs font-medium text-gray-600">asOf (Unix timestamp)</label>
+              <input className="w-full rounded-xl border px-3 py-2 text-sm"
+                     placeholder="e.g. 1710000000"
+                     value={asOf} onChange={e=>setAsOf(e.target.value)} />
+            </div>
+            <div className="pt-5">
+              <Button onClick={postNAV} disabled={busy}>{busy ? "Posting…" : "Post NAV"}</Button>
+            </div>
           </div>
         </Card>
 
