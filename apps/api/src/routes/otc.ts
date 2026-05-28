@@ -120,6 +120,15 @@ export default async function (app: FastifyInstance) {
       const { scenario, seller, buyer } = body;
       const results: string[] = [];
 
+      // Reset seller balance so each scenario starts from a known state.
+      // Without this, leftover tokens from prior runs accumulate and can
+      // cause the Scenario 2 balance check to pass when it should fail.
+      const existing = await token.read.balanceOf([seller as `0x${string}`]);
+      if (existing > 0n) {
+        await token.write.burnFrom([seller as `0x${string}`, existing]);
+        results.push(`Reset seller balance (burned ${existing / 10n ** 18n} OTCF)`);
+      }
+
       if (scenario === 1) {
         const mintTx = await token.write.mint([seller as `0x${string}`, 1000n * 10n ** 18n]);
         results.push(`Minted 1000 OTCF to seller (tx: ${mintTx})`);
