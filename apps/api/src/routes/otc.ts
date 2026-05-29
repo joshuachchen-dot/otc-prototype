@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isAddress } from 'viem';
 import { otcTrade, token, nav } from '../chain.js';
 import { requireApiKey } from '../middleware/auth.js';
+import { kycIsEligible } from '../db/kyc.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema  = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
@@ -56,6 +57,13 @@ export default async function (app: FastifyInstance) {
         amount:   amountSchema,
         navFloor: amountSchema,
       }).parse(req.body);
+
+      if (!await kycIsEligible(body.buyer)) {
+        return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: buyer address has not completed KYC' });
+      }
+      if (!await kycIsEligible(body.seller)) {
+        return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: seller address has not completed KYC' });
+      }
 
       const tx = await otcTrade.write.propose([
         body.seller   as `0x${string}`,

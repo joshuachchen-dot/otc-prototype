@@ -101,6 +101,7 @@ echo "   Seller ($SELLER_ADDR) whitelisted"
 echo "   Buyer  ($BUYER_ADDR)  whitelisted"
 
 # ── 4. API ────────────────────────────────────────────────────────────────────
+
 echo "▶  Starting API on port 3001..."
 (cd "$ROOT" && pnpm --filter @ots/api dev) &
 PIDS+=($!)
@@ -115,6 +116,18 @@ for i in $(seq 1 60); do
   echo -n "."
   sleep 0.5
 done
+
+# ── 4b. KYC-approve test accounts ────────────────────────────────────────────
+echo "▶  Marking OTC test accounts as KYC-eligible..."
+kyc_approve() {
+  curl -sf -X POST http://127.0.0.1:3001/kyc/mark-eligible \
+    -H "content-type: application/json" \
+    -H "x-api-key: $DEV_API_KEY" \
+    -d "{\"address\":\"$1\"}" > /dev/null 2>&1
+}
+kyc_approve "$SELLER_ADDR"
+kyc_approve "$BUYER_ADDR"
+echo "   Seller and Buyer marked eligible"
 
 # ── 5. Web UI ─────────────────────────────────────────────────────────────────
 echo "▶  Starting Web UI on port 3000..."
