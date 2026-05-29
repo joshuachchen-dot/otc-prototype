@@ -42,7 +42,6 @@ describe('POST /kyc/mark-eligible', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
     expect(mockQuery).toHaveBeenCalledTimes(1);
-    // address is lowercased before storage
     const [sql, params] = mockQuery.mock.calls[0] as unknown as [string, [string, string | null]];
     expect(params[0]).toBe(VALID_ADDR.toLowerCase());
     expect(params[1]).toBe('sha256:abc123');
@@ -108,12 +107,12 @@ describe('GET /kyc/:address', () => {
     expect(params[0]).toBe(VALID_ADDR.toLowerCase());
   });
 
-  it('returns { eligible: false } when investor not found', async () => {
+  it('returns { eligible: false, vc_hash: null } when investor not found', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
 
     const res = await app.inject({ method: 'GET', url: `/kyc/${VALID_ADDR}` });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ eligible: false });
+    expect(res.json()).toEqual({ eligible: false, vc_hash: null });
   });
 
   it('returns 400 for an invalid address param', async () => {
@@ -131,35 +130,34 @@ describe('GET /kyc/:address', () => {
   });
 });
 
-// ── DB-null guard (503 when DATABASE_URL missing) ────────────────────────────
+// ── In-memory fallback (db is null) ──────────────────────────────────────────
 
-describe('503 when db is null', () => {
-  let appNoDB: FastifyInstance;
+describe('in-memory fallback when db is null', () => {
+  let appNoDb: FastifyInstance;
 
   beforeAll(async () => {
-    // Override the mock so db is null for this sub-suite
     jest.unstable_mockModule('../src/db/client', () => ({ db: null }));
-    appNoDB = Fastify({ logger: false });
-    // Re-import route after remocking (resetModules is true in jest config)
+    appNoDb = Fastify({ logger: false });
     const { default: kycRoutes } = await import('../src/routes/kyc.js');
-    await appNoDB.register(kycRoutes);
-    await appNoDB.ready();
+    await appNoDb.register(kycRoutes);
+    await appNoDb.ready();
   });
 
-  afterAll(() => appNoDB.close());
+  afterAll(() => appNoDb.close());
 
-  it('returns 503 on POST /kyc/mark-eligible when db is null', async () => {
-    const res = await appNoDB.inject({
+  it('marks an address eligible and returns { ok: true }', async () => {
+    const res = await appNoDb.inject({
       method: 'POST',
       url: '/kyc/mark-eligible',
       payload: { address: VALID_ADDR },
     });
-    expect(res.statusCode).toBe(503);
-    expect(res.json().error).toMatch(/database not configured/i);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 503 on GET /kyc/:address when db is null', async () => {
-    const res = await appNoDB.inject({ method: 'GET', url: `/kyc/${VALID_ADDR}` });
-    expect(res.statusCode).toBe(503);
+  it('returns eligible: true after marking', async () => {
+    const res = await appNoDb.inject({ method: 'GET', url: `/kyc/${VALID_ADDR}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().eligible).toBe(true);
   });
 });

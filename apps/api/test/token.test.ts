@@ -17,6 +17,15 @@ jest.unstable_mockModule('../src/chain', () => ({
   },
 }));
 
+// ── Mock KYC — eligible by default; individual tests override as needed ──────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockKycIsEligible = jest.fn() as any;
+mockKycIsEligible.mockResolvedValue(true);
+
+jest.unstable_mockModule('../src/db/kyc', () => ({
+  kycIsEligible: mockKycIsEligible,
+}));
+
 const VALID_ADDR = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 const TX_HASH = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
@@ -83,6 +92,20 @@ describe('POST /token/subscribe', () => {
       payload: { to: VALID_ADDR, amount: '1.5' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 403 when address is not KYC-eligible', async () => {
+    mockKycIsEligible.mockResolvedValueOnce(false);
+    mockMint.mockClear();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/token/subscribe',
+      payload: { to: VALID_ADDR, amount: '1000000000000000000' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/KYC_NOT_ELIGIBLE/);
+    expect(mockMint).not.toHaveBeenCalled();
   });
 
   it('returns 500 when mint throws', async () => {

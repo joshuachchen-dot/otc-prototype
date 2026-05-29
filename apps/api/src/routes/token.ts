@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isAddress } from 'viem';
 import { token } from '../chain.js';
 import { requireApiKey } from '../middleware/auth.js';
+import { kycIsEligible } from '../db/kyc.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
@@ -11,6 +12,11 @@ export default async function (app: FastifyInstance) {
   app.post('/token/subscribe', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({ to: addressSchema, amount: amountSchema }).parse(req.body);
+
+      if (!await kycIsEligible(body.to)) {
+        return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: address has not completed KYC' });
+      }
+
       const tx = await token.write.mint([body.to as `0x${string}`, BigInt(body.amount)]);
       return { tx };
     } catch (err: any) {
