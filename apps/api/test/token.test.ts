@@ -96,6 +96,7 @@ describe('POST /token/subscribe', () => {
 
   it('returns 403 when address is not KYC-eligible', async () => {
     mockKycIsEligible.mockResolvedValueOnce(false);
+    mockMint.mockClear();
 
     const res = await app.inject({
       method: 'POST',
