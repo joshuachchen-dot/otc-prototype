@@ -40,6 +40,30 @@ export default function Home() {
         />
       </div>
 
+      <div style={{ marginTop: 28, padding: "16px 20px", border: "1px solid #fde047", borderRadius: 14, background: "#fefce8" }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#713f12", marginBottom: 6 }}>
+          Sandbox — OTC Trade Demo
+        </div>
+        <div style={{ fontSize: 14, color: "#713f12", marginBottom: 12 }}>
+          Isolated demo environment. Run live trade scenarios against a throwaway test chain — no real assets, no production data.
+        </div>
+        <Link href="/sandbox" style={{ textDecoration: "none" }}>
+          <div
+            style={{
+              display: "inline-block",
+              padding: "9px 16px",
+              borderRadius: 10,
+              background: "#713f12",
+              color: "white",
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            Open Sandbox →
+          </div>
+        </Link>
+      </div>
+
       <div
         style={{
           marginTop: 28,
