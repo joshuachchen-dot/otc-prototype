@@ -1,13 +1,11 @@
 import { useState } from "react";
-import { API, apiFetch, sandboxAPI, sandboxFetch } from "@/lib/api";
+import { API, apiFetch } from "@/lib/api";
 
 const SELLER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const BUYER  = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
 
 const TRADE_AMOUNT = (500n * 10n ** 18n).toString();
 const NAV_FLOOR    = "2000000000";
-
-type Tab = "simulator" | "sandbox";
 
 type ScenarioDef = {
   id: 1 | 2 | 3;
@@ -59,13 +57,8 @@ const SCENARIOS: ScenarioDef[] = [
 
 type TradeResult = { id: number; seller: string; buyer: string; amount: string; navFloor: string; status: string };
 type StepLog     = { label: string; value: string; ok: boolean };
-type TabState    = { logs: Record<number, StepLog[]>; trades: Record<number, TradeResult>; outcomes: Record<number, { ok: boolean; msg: string }> };
 
 const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
-
-function emptyTabState(): TabState {
-  return { logs: {}, trades: {}, outcomes: {} };
-}
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; color: string }> = {
@@ -109,145 +102,92 @@ function TradeCard({ trade }: { trade: TradeResult }) {
 }
 
 export default function OTCPage() {
-  const [tab, setTab] = useState<Tab>("simulator");
   const [running, setRunning] = useState<1 | 2 | 3 | null>(null);
+  const [logs, setLogs]       = useState<Record<number, StepLog[]>>({});
+  const [trades, setTrades]   = useState<Record<number, TradeResult>>({});
+  const [outcomes, setOutcomes] = useState<Record<number, { ok: boolean; msg: string }>>({});
 
-  const [simState,     setSimState]     = useState<TabState>(emptyTabState);
-  const [sandboxState, setSandboxState] = useState<TabState>(emptyTabState);
-
-  const state    = tab === "simulator" ? simState     : sandboxState;
-  const setState = tab === "simulator" ? setSimState  : setSandboxState;
-  const fetch_   = tab === "simulator" ? apiFetch     : sandboxFetch;
-  const api_     = tab === "simulator" ? API          : sandboxAPI;
-
-  const hasAnyResults = Object.keys(state.logs).length > 0 || Object.keys(state.outcomes).length > 0;
+  const hasAnyResults = Object.keys(logs).length > 0 || Object.keys(outcomes).length > 0;
 
   function resetAll() {
-    setState(emptyTabState());
+    setLogs({});
+    setTrades({});
+    setOutcomes({});
   }
 
   function clearScenario(id: number) {
-    setState((prev) => ({
-      logs:     Object.fromEntries(Object.entries(prev.logs).filter(([k]) => Number(k) !== id)),
-      trades:   Object.fromEntries(Object.entries(prev.trades).filter(([k]) => Number(k) !== id)),
-      outcomes: Object.fromEntries(Object.entries(prev.outcomes).filter(([k]) => Number(k) !== id)),
-    }));
+    setLogs((p)     => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id)));
+    setTrades((p)   => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id)));
+    setOutcomes((p) => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id)));
   }
 
   function addLog(scenario: number, log: StepLog) {
-    setState((prev) => ({ ...prev, logs: { ...prev.logs, [scenario]: [...(prev.logs[scenario] ?? []), log] } }));
+    setLogs((p) => ({ ...p, [scenario]: [...(p[scenario] ?? []), log] }));
   }
 
   async function runScenario(s: ScenarioDef) {
     setRunning(s.id);
-    setState((prev) => ({
-      ...prev,
-      logs:     { ...prev.logs,     [s.id]: [] },
-      trades:   Object.fromEntries(Object.entries(prev.trades).filter(([k]) => Number(k) !== s.id)),
-      outcomes: Object.fromEntries(Object.entries(prev.outcomes).filter(([k]) => Number(k) !== s.id)),
-    }));
+    setLogs((p)     => ({ ...p, [s.id]: [] }));
+    setTrades((p)   => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== s.id)));
+    setOutcomes((p) => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== s.id)));
 
     try {
-      const setupRes  = await fetch_("/otc/setup-scenario", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scenario: s.id, seller: SELLER, buyer: BUYER }) });
+      const setupRes  = await apiFetch("/otc/setup-scenario", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scenario: s.id, seller: SELLER, buyer: BUYER }) });
       const setupData = await setupRes.json();
       if (!setupRes.ok) throw new Error(setupData.error ?? "Setup failed");
       for (const step of setupData.steps as string[]) addLog(s.id, { label: "Setup", value: step, ok: true });
 
-      const proposeRes  = await fetch_("/otc/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: NAV_FLOOR }) });
+      const proposeRes  = await apiFetch("/otc/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: NAV_FLOOR }) });
       const proposeData = await proposeRes.json();
       if (!proposeRes.ok) throw new Error(proposeData.error ?? "Propose failed");
       const tradeId: number = proposeData.id;
       addLog(s.id, { label: `Proposed trade #${tradeId}`, value: `tx: ${proposeData.tx}`, ok: true });
 
-      const settleRes  = await fetch_("/otc/settle", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: tradeId }) });
+      const settleRes  = await apiFetch("/otc/settle", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: tradeId }) });
       const settleData = await settleRes.json();
       if (settleRes.ok) {
         addLog(s.id, { label: "Settlement", value: `tx: ${settleData.tx}`, ok: true });
-        setState((prev) => ({ ...prev, outcomes: { ...prev.outcomes, [s.id]: { ok: true, msg: "Trade settled successfully" } } }));
+        setOutcomes((p) => ({ ...p, [s.id]: { ok: true, msg: "Trade settled successfully" } }));
       } else {
         const reason = settleData.error ?? "unknown";
         addLog(s.id, { label: "Settlement rejected", value: reason, ok: false });
-        setState((prev) => ({ ...prev, outcomes: { ...prev.outcomes, [s.id]: { ok: false, msg: reason } } }));
+        setOutcomes((p) => ({ ...p, [s.id]: { ok: false, msg: reason } }));
       }
 
-      const tradeRes  = await fetch(api_(`/otc/trade/${tradeId}`));
+      const tradeRes  = await fetch(API(`/otc/trade/${tradeId}`));
       const tradeData = await tradeRes.json();
-      setState((prev) => ({ ...prev, trades: { ...prev.trades, [s.id]: { id: tradeId, ...tradeData } } }));
+      setTrades((p) => ({ ...p, [s.id]: { id: tradeId, ...tradeData } }));
 
     } catch (err: any) {
       addLog(s.id, { label: "Error", value: err.message ?? String(err), ok: false });
-      setState((prev) => ({ ...prev, outcomes: { ...prev.outcomes, [s.id]: { ok: false, msg: err.message ?? "Unexpected error" } } }));
+      setOutcomes((p) => ({ ...p, [s.id]: { ok: false, msg: err.message ?? "Unexpected error" } }));
     } finally {
       setRunning(null);
     }
   }
 
-  const isSandbox = tab === "sandbox";
-
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: "0 20px", fontFamily: ff }}>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 28, borderBottom: "2px solid #e5e7eb", paddingBottom: 0 }}>
-        {(["simulator", "sandbox"] as Tab[]).map((t) => {
-          const active = tab === t;
-          return (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                padding: "9px 20px",
-                borderRadius: "8px 8px 0 0",
-                border: "1px solid",
-                borderBottom: active ? "2px solid white" : "1px solid #e5e7eb",
-                borderColor: active ? "#e5e7eb" : "#e5e7eb",
-                marginBottom: active ? -2 : 0,
-                background: active ? "white" : "#f9fafb",
-                color: active ? "#111" : "#6b7280",
-                fontWeight: active ? 700 : 500,
-                fontSize: 14,
-                cursor: "pointer",
-              }}
-            >
-              {t === "simulator" ? "OTC Simulator" : "Sandbox"}
-              {t === "sandbox" && (
-                <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", background: "#fde047", color: "#713f12", padding: "1px 6px", borderRadius: 4 }}>
-                  DEMO
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Sandbox banner */}
-      {isSandbox && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 10, background: "#fefce8", border: "1px solid #fde047", marginBottom: 24, fontSize: 13, color: "#713f12" }}>
-          <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.08em", background: "#fde047", color: "#713f12", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
-            SANDBOX
-          </span>
-          <span>Isolated demo environment. All transactions run against a throwaway test chain — no real assets, no production data.</span>
-        </div>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 10, background: "#fefce8", border: "1px solid #fde047", marginBottom: 28, fontSize: 13, color: "#713f12" }}>
+        <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.08em", background: "#fde047", color: "#713f12", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
+          SANDBOX
+        </span>
+        <span>Isolated demo environment. All transactions run against a throwaway test chain — no real assets, no production data.</span>
+      </div>
 
       {/* Header */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", marginBottom: 4 }}>
-            {isSandbox ? "OTC Trade — Live Demo" : "OTC Trade Simulator"}
-          </h1>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", marginBottom: 4 }}>OTC Trade Simulator</h1>
           <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
-            {isSandbox
-              ? <>Run each scenario to see how <code style={{ background: "#f3f4f6", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code> enforces bilateral trade conditions atomically on-chain. Every execution is real — the contract either settles or reverts with the specific reason.</>
-              : <>Three bilateral trade scenarios — conditions enforced atomically on-chain by <code style={{ background: "#f3f4f6", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code>.</>
-            }
+            Three bilateral trade scenarios — conditions enforced atomically on-chain by{" "}
+            <code style={{ background: "#f3f4f6", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code>.
           </p>
         </div>
         {hasAnyResults && (
-          <button
-            onClick={resetAll}
-            style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", color: "#374151", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
-          >
+          <button onClick={resetAll} style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", color: "#374151", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
             Reset All
           </button>
         )}
@@ -255,8 +195,8 @@ export default function OTCPage() {
 
       {/* Trade params */}
       <div style={{ padding: "12px 16px", borderRadius: 10, background: "#f0f9ff", border: "1px solid #bae6fd", fontSize: 13, color: "#0369a1", marginBottom: 28, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px" }}>
-        <div><b>Seller</b> — {isSandbox ? "Demo account A" : "Anvil #1"}: {SELLER.slice(0, 10)}…</div>
-        <div><b>Buyer</b>  — {isSandbox ? "Demo account B" : "Anvil #2"}: {BUYER.slice(0, 10)}…</div>
+        <div><b>Seller</b> — Anvil #1: {SELLER.slice(0, 10)}…</div>
+        <div><b>Buyer</b>  — Anvil #2: {BUYER.slice(0, 10)}…</div>
         <div><b>Trade amount:</b> 500 OTCF</div>
         <div><b>NAV floor (buy-side term):</b> $2,000</div>
       </div>
@@ -264,10 +204,9 @@ export default function OTCPage() {
       {/* Scenarios */}
       {SCENARIOS.map((s) => {
         const isBusy       = running === s.id;
-        const outcome      = state.outcomes[s.id];
-        const scenarioLogs = state.logs[s.id] ?? [];
-        const trade        = state.trades[s.id];
-
+        const outcome      = outcomes[s.id];
+        const scenarioLogs = logs[s.id] ?? [];
+        const trade        = trades[s.id];
         const outcomeColor = s.expectedOutcome === "success"
           ? { bg: "#dcfce7", border: "#86efac", text: "#15803d" }
           : { bg: "#fee2e2", border: "#fca5a5", text: "#b91c1c" };

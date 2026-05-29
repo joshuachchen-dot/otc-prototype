@@ -45,7 +45,7 @@ export default function Home() {
           OTC Trade Simulator
         </div>
         <div style={{ fontSize: 14, color: "#713f12", marginBottom: 12 }}>
-          Run live trade scenarios on-chain. Includes a Sandbox tab for isolated demos — no real assets, no production data.
+          Run live trade scenarios on-chain against a throwaway test chain — no real assets, no production data.
         </div>
         <Link href="/otc" style={{ textDecoration: "none" }}>
           <div
