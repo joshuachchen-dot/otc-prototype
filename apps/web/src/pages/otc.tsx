@@ -159,6 +159,20 @@ export default function OTCPage() {
   const [trades, setTrades] = useState<Record<number, TradeResult>>({});
   const [outcomes, setOutcomes] = useState<Record<number, { ok: boolean; msg: string }>>({});
 
+  const hasAnyResults = Object.keys(logs).length > 0 || Object.keys(outcomes).length > 0;
+
+  function resetAll() {
+    setLogs({});
+    setTrades({});
+    setOutcomes({});
+  }
+
+  function clearScenario(id: number) {
+    setLogs((prev)     => { const n = { ...prev };     delete n[id]; return n; });
+    setTrades((prev)   => { const n = { ...prev };     delete n[id]; return n; });
+    setOutcomes((prev) => { const n = { ...prev };     delete n[id]; return n; });
+  }
+
   function addLog(scenario: number, log: StepLog) {
     setLogs((prev) => ({ ...prev, [scenario]: [...(prev[scenario] ?? []), log] }));
   }
@@ -251,14 +265,35 @@ export default function OTCPage() {
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: "0 20px", fontFamily: ff }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", marginBottom: 4 }}>
-          OTC Trade Simulator
-        </h1>
-        <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
-          Three bilateral trade scenarios — conditions enforced atomically on-chain by{" "}
-          <code style={{ background: "#f3f4f6", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code>.
-        </p>
+      <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", marginBottom: 4 }}>
+            OTC Trade Simulator
+          </h1>
+          <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
+            Three bilateral trade scenarios — conditions enforced atomically on-chain by{" "}
+            <code style={{ background: "#f3f4f6", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code>.
+          </p>
+        </div>
+        {hasAnyResults && (
+          <button
+            onClick={resetAll}
+            style={{
+              flexShrink: 0,
+              padding: "7px 14px",
+              borderRadius: 8,
+              border: "1px solid #d1d5db",
+              background: "white",
+              color: "#374151",
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Reset All
+          </button>
+        )}
       </div>
 
       {/* Trade params banner */}
@@ -314,24 +349,43 @@ export default function OTCPage() {
                 </div>
                 <p style={{ fontSize: 13, color: "#666", margin: 0 }}>{s.description}</p>
               </div>
-              <button
-                onClick={() => runScenario(s)}
-                disabled={isBusy || running !== null}
-                style={{
-                  flexShrink: 0,
-                  padding: "9px 18px",
-                  borderRadius: 10,
-                  border: "none",
-                  background: isBusy || running !== null ? "#d1d5db" : "#111",
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: isBusy || running !== null ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {isBusy ? "Running…" : "Run"}
-              </button>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                {outcome && !isBusy && (
+                  <button
+                    onClick={() => clearScenario(s.id)}
+                    style={{
+                      padding: "9px 14px",
+                      borderRadius: 10,
+                      border: "1px solid #d1d5db",
+                      background: "white",
+                      color: "#374151",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={() => runScenario(s)}
+                  disabled={isBusy || running !== null}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: isBusy || running !== null ? "#d1d5db" : "#111",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: isBusy || running !== null ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {isBusy ? "Running…" : "Run"}
+                </button>
+              </div>
             </div>
 
             {/* Conditions */}
