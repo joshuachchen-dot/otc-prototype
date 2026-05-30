@@ -23,6 +23,9 @@ import {NAVRegistry} from "./NAVRegistry.sol";
 contract OTCTrade is AccessControl {
     bytes32 public constant SETTLEMENT_AGENT_ROLE = keccak256("SETTLEMENT_AGENT_ROLE");
 
+    // NAV must have been posted within this window for settlement to proceed
+    uint256 public constant MAX_NAV_AGE = 24 hours;
+
     // ── Types ───────────────────────────────────────────────────────────────
     enum Status { Pending, Settled, Cancelled }
 
@@ -118,6 +121,7 @@ contract OTCTrade is AccessControl {
         );
 
         NAVRegistry.NavRecord memory nav = navRegistry.latestNAV();
+        require(block.timestamp - nav.storedAt <= MAX_NAV_AGE, "STALE_NAV");
         require(nav.nav >= t.navFloor, "NAV_BELOW_FLOOR");
 
         // State update before external calls (checks-effects-interactions)
