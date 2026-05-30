@@ -2,6 +2,19 @@ import { jest, describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 
+// ── Mock env to strip API_KEY so requireApiKey is a no-op in tests ──────────
+jest.unstable_mockModule('../src/env', () => ({
+  ENV: {
+    RPC_URL: 'http://localhost:8545',
+    PRIVATE_KEY: '0x' + 'a'.repeat(64),
+    FUND_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    NAV_REGISTRY_ADDRESS: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+    OTC_TRADE_ADDRESS: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
+    PORT: 3001,
+    // API_KEY intentionally absent — disables requireApiKey in tests
+  },
+}));
+
 // ── Mock chain BEFORE any dynamic import that transitively loads chain.ts / env.ts ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockMint = jest.fn() as any;
@@ -26,6 +39,20 @@ jest.unstable_mockModule('../src/db/kyc', () => ({
   kycIsEligible: mockKycIsEligible,
 }));
 
+// ── Mock AML — all checks pass by default; individual tests override ─────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockAmlCheckSize     = jest.fn() as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockAmlCheckVelocity = jest.fn() as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockAmlRecord        = jest.fn() as any;
+
+jest.unstable_mockModule('../src/db/aml', () => ({
+  amlCheckSize:     mockAmlCheckSize,
+  amlCheckVelocity: mockAmlCheckVelocity,
+  amlRecord:        mockAmlRecord,
+}));
+
 const VALID_ADDR = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 const TX_HASH = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
@@ -39,6 +66,17 @@ beforeAll(async () => {
 });
 
 afterAll(() => app.close());
+
+beforeEach(() => {
+  mockMint.mockReset();
+  mockBurnFrom.mockReset();
+  mockBalanceOf.mockReset();
+  mockKycIsEligible.mockReset();
+  mockKycIsEligible.mockResolvedValue(true);
+  mockAmlCheckSize.mockReset();
+  mockAmlCheckVelocity.mockReset();
+  mockAmlRecord.mockReset();
+});
 
 // ── POST /token/subscribe ────────────────────────────────────────────────────
 
@@ -96,7 +134,6 @@ describe('POST /token/subscribe', () => {
 
   it('returns 403 when address is not KYC-eligible', async () => {
     mockKycIsEligible.mockResolvedValueOnce(false);
-    mockMint.mockClear();
 
     const res = await app.inject({
       method: 'POST',
@@ -118,6 +155,32 @@ describe('POST /token/subscribe', () => {
     });
     expect(res.statusCode).toBe(500);
     expect(res.json()).toHaveProperty('error');
+  });
+
+  it('returns 403 when AML size cap is exceeded on subscribe', async () => {
+    mockAmlCheckSize.mockImplementationOnce(() => { throw new Error('AML_SIZE_EXCEEDED'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/token/subscribe',
+      payload: { to: VALID_ADDR, amount: '100' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('AML_SIZE_EXCEEDED');
+    expect(mockMint).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when AML velocity limit is exceeded on subscribe', async () => {
+    mockAmlCheckVelocity.mockImplementationOnce(() => { throw new Error('AML_VELOCITY_EXCEEDED'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/token/subscribe',
+      payload: { to: VALID_ADDR, amount: '100' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('AML_VELOCITY_EXCEEDED');
+    expect(mockMint).not.toHaveBeenCalled();
   });
 });
 
@@ -165,6 +228,32 @@ describe('POST /token/redeem', () => {
       payload: { from: VALID_ADDR, amount: '100' },
     });
     expect(res.statusCode).toBe(500);
+  });
+
+  it('returns 403 when AML size cap is exceeded on redeem', async () => {
+    mockAmlCheckSize.mockImplementationOnce(() => { throw new Error('AML_SIZE_EXCEEDED'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/token/redeem',
+      payload: { from: VALID_ADDR, amount: '100' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('AML_SIZE_EXCEEDED');
+    expect(mockBurnFrom).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when AML velocity limit is exceeded on redeem', async () => {
+    mockAmlCheckVelocity.mockImplementationOnce(() => { throw new Error('AML_VELOCITY_EXCEEDED'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/token/redeem',
+      payload: { from: VALID_ADDR, amount: '100' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('AML_VELOCITY_EXCEEDED');
+    expect(mockBurnFrom).not.toHaveBeenCalled();
   });
 });
 
