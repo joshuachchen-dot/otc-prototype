@@ -1,8 +1,18 @@
+import { jest, describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import type { FastifyInstance } from 'fastify';
 
-// risk.ts has no chain/env dependencies — import directly
+// ── Mock env to strip API_KEY so requireApiKey is a no-op in tests ──────────
+jest.unstable_mockModule('../src/env', () => ({
+  ENV: {
+    RPC_URL: 'http://localhost:8545',
+    PRIVATE_KEY: '0x' + 'a'.repeat(64),
+    FUND_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    NAV_REGISTRY_ADDRESS: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+    OTC_TRADE_ADDRESS: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
+    PORT: 3001,
+  },
+}));
 let app: FastifyInstance;
 
 beforeAll(async () => {
