@@ -1,15 +1,17 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { ENV } from './env';
-import health from './routes/health';
-import kyc from './routes/kyc';
-import nav from './routes/nav';
-import token from './routes/token';
-import risk from './routes/risk';
-import audit from './routes/audit';
-import market from './routes/market';
-import otc from './routes/otc';
-import { startNavScheduler } from './jobs/navScheduler';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import { ENV } from './env.js';
+import health from './routes/health.js';
+import kyc from './routes/kyc.js';
+import nav from './routes/nav.js';
+import token from './routes/token.js';
+import risk from './routes/risk.js';
+import audit from './routes/audit.js';
+import market from './routes/market.js';
+import otc from './routes/otc.js';
+import { startNavScheduler } from './jobs/navScheduler.js';
 
 // Global BigInt -> string fallback so JSON.stringify never throws on BigInt values
 (BigInt.prototype as any).toJSON = function () {
@@ -18,8 +20,34 @@ import { startNavScheduler } from './jobs/navScheduler';
 
 const app = Fastify({ logger: true });
 
-await app.register(cors, { origin: 'http://localhost:3000' });
+// ── Security headers (helmet) ─────────────────────────────────────────────────
+// Sets HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, etc.
+// CSP is disabled here; enable and configure it if a UI is co-hosted on this origin.
+await app.register(helmet, {
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+});
 
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// Origin is env-configurable so staging/prod can restrict to their actual domain.
+const allowedOrigin = ENV.CORS_ORIGIN ?? 'http://localhost:3000';
+await app.register(cors, {
+  origin: allowedOrigin,
+  methods: ['GET', 'POST'],
+});
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Applies globally; default 60 req/min/IP, configurable via RATE_LIMIT_RPM.
+await app.register(rateLimit, {
+  max:        ENV.RATE_LIMIT_RPM,
+  timeWindow: '1 minute',
+  keyGenerator: (req) => req.ip,
+  errorResponseBuilder: (_req, context) => ({
+    error: `Rate limit exceeded — max ${context.max} requests per minute`,
+  }),
+});
+
+// ── Routes ───────────────────────────────────────────────────────────────────
 await app.register(health);
 await app.register(kyc);
 await app.register(nav);
@@ -29,7 +57,7 @@ await app.register(audit);
 await app.register(market);
 await app.register(otc);
 
-// Global error handler - catches unhandled route errors and returns structured JSON
+// ── Global error handler ──────────────────────────────────────────────────────
 app.setErrorHandler((err, _req, reply) => {
   app.log.error(err);
   const statusCode = err.statusCode ?? 500;
