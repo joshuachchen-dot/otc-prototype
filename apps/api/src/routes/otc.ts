@@ -57,6 +57,12 @@ export default async function (app: FastifyInstance) {
         buyer:    addressSchema,
         amount:   amountSchema,
         navFloor: amountSchema,
+        // EIP-712 seller consent fields
+        nonce:    z.coerce.bigint(),
+        deadline: z.coerce.bigint(),
+        v:        z.number().int().min(27).max(28),
+        r:        z.string().regex(/^0x[0-9a-fA-F]{64}$/, 'Invalid r'),
+        s:        z.string().regex(/^0x[0-9a-fA-F]{64}$/, 'Invalid s'),
       }).parse(req.body);
 
       if (!await kycIsEligible(body.buyer)) {
@@ -76,6 +82,11 @@ export default async function (app: FastifyInstance) {
         body.buyer    as `0x${string}`,
         amt,
         BigInt(body.navFloor),
+        body.nonce,
+        body.deadline,
+        body.v,
+        body.r as `0x${string}`,
+        body.s as `0x${string}`,
       ]);
       await amlRecord(body.seller, amt);
       await amlRecord(body.buyer,  amt);
