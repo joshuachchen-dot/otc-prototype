@@ -5,12 +5,15 @@ import type { FastifyInstance } from 'fastify';
 // ── Mock chain and env BEFORE any dynamic import ─────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockGetLogs = jest.fn() as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockGetBlock = jest.fn() as any;
 
 const FUND_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 const NAV_REGISTRY_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+const MOCK_BLOCK_TIMESTAMP = 1700000000n;
 
 jest.unstable_mockModule('../src/chain', () => ({
-  rpc: { getLogs: mockGetLogs },
+  rpc: { getLogs: mockGetLogs, getBlock: mockGetBlock },
 }));
 
 jest.unstable_mockModule('../src/env', () => ({
@@ -49,6 +52,8 @@ afterAll(() => app.close());
 
 beforeEach(() => {
   mockGetLogs.mockReset();
+  mockGetBlock.mockReset();
+  mockGetBlock.mockResolvedValue({ timestamp: MOCK_BLOCK_TIMESTAMP });
 });
 
 // ── GET /audit/export ─────────────────────────────────────────────────────────
@@ -100,7 +105,7 @@ describe('GET /audit/export', () => {
     const lines = res.body.trim().split('\n');
 
     expect(lines).toHaveLength(2);
-    expect(lines[1]).toMatch(/^MINT,3,0,/);
+    expect(lines[1]).toMatch(/^MINT,3,1700000000,/);
     expect(lines[1]).toContain(ALICE);
     expect(lines[1]).toContain('1000000000000000000');
   });
@@ -114,7 +119,7 @@ describe('GET /audit/export', () => {
     const lines = res.body.trim().split('\n');
 
     expect(lines).toHaveLength(2);
-    expect(lines[1]).toMatch(/^BURN,7,0,/);
+    expect(lines[1]).toMatch(/^BURN,7,1700000000,/);
     expect(lines[1]).toContain(ALICE);
     expect(lines[1]).toContain('500000000000000000');
   });
