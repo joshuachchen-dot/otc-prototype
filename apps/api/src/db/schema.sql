@@ -13,3 +13,15 @@ create table if not exists audit_log (
     action text,
     payload jsonb
 );
+
+-- AML velocity ledger: one row per on-chain transaction, pruned by a rolling
+-- 24h window. Survives server restarts unlike the in-memory fallback.
+create table if not exists aml_transactions (
+    id      serial primary key,
+    address text not null,
+    amount  numeric not null,       -- token units (18 decimals), stored as numeric
+    ts      timestamptz not null default now()
+);
+
+create index if not exists aml_transactions_address_ts
+    on aml_transactions (address, ts);

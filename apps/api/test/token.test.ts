@@ -51,6 +51,7 @@ jest.unstable_mockModule('../src/db/aml', () => ({
   amlCheckSize:     mockAmlCheckSize,
   amlCheckVelocity: mockAmlCheckVelocity,
   amlRecord:        mockAmlRecord,
+  amlAlert:         jest.fn(),
 }));
 
 const VALID_ADDR = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
@@ -187,6 +188,19 @@ describe('POST /token/subscribe', () => {
 // ── POST /token/redeem ───────────────────────────────────────────────────────
 
 describe('POST /token/redeem', () => {
+  it('returns 403 when address is not KYC-eligible on redeem', async () => {
+    mockKycIsEligible.mockResolvedValueOnce(false);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/token/redeem',
+      payload: { from: VALID_ADDR, amount: '100' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/KYC_NOT_ELIGIBLE/);
+    expect(mockBurnFrom).not.toHaveBeenCalled();
+  });
+
   it('calls token.write.burnFrom and returns tx hash', async () => {
     mockBurnFrom.mockResolvedValueOnce(TX_HASH as `0x${string}`);
 
