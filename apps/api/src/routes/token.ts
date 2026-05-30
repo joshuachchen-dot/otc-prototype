@@ -28,7 +28,7 @@ export default async function (app: FastifyInstance) {
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
       if (err.message?.startsWith('AML_')) {
-        await amlAlert(req.body?.to ?? '', err.message, { route: 'subscribe' });
+        await amlAlert((req.body as any)?.to ?? '', err.message, { route: 'subscribe' });
         return reply.code(403).send({ error: err.message });
       }
       reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Subscription failed' });
@@ -53,7 +53,7 @@ export default async function (app: FastifyInstance) {
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
       if (err.message?.startsWith('AML_')) {
-        await amlAlert(req.body?.from ?? '', err.message, { route: 'redeem' });
+        await amlAlert((req.body as any)?.from ?? '', err.message, { route: 'redeem' });
         return reply.code(403).send({ error: err.message });
       }
       reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Redemption failed' });
