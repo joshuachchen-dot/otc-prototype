@@ -22,6 +22,9 @@ const EnvSchema = z.object({
   // When set, all mutating and sensitive API routes require X-Api-Key header.
   // Leave unset in local dev; always set in any deployed environment.
   API_KEY: z.string().min(16).optional(),
+  // AML thresholds (token units, 18 decimals). Defaults: 10k and 50k OTCF.
+  AML_MAX_TX:       z.coerce.bigint().default(10_000n * 10n ** 18n),
+  AML_VELOCITY_24H: z.coerce.bigint().default(50_000n * 10n ** 18n),
 });
 
 /**

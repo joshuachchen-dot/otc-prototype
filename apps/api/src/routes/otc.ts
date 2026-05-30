@@ -4,7 +4,7 @@ import { isAddress } from 'viem';
 import { otcTrade, token, nav } from '../chain.js';
 import { requireApiKey } from '../middleware/auth.js';
 import { kycIsEligible } from '../db/kyc.js';
-import { amlCheckSize, amlCheckVelocity, amlRecord } from '../db/aml.js';
+import { amlCheckSize, amlCheckVelocity, amlRecord, amlAlert } from '../db/aml.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema  = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
@@ -68,8 +68,8 @@ export default async function (app: FastifyInstance) {
 
       const amt = BigInt(body.amount);
       amlCheckSize(amt);
-      amlCheckVelocity(body.seller, amt);
-      amlCheckVelocity(body.buyer,  amt);
+      await amlCheckVelocity(body.seller, amt);
+      await amlCheckVelocity(body.buyer,  amt);
 
       const tx = await otcTrade.write.propose([
         body.seller   as `0x${string}`,
@@ -77,15 +77,19 @@ export default async function (app: FastifyInstance) {
         amt,
         BigInt(body.navFloor),
       ]);
-      amlRecord(body.seller, amt);
-      amlRecord(body.buyer,  amt);
+      await amlRecord(body.seller, amt);
+      await amlRecord(body.buyer,  amt);
 
       const count = await otcTrade.read.tradeCount();
       const id = Number(count) - 1;
       return { tx, id };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
-      if (err.message?.startsWith('AML_')) return reply.code(403).send({ error: err.message });
+      if (err.message?.startsWith('AML_')) {
+        const b = req.body as any;
+        await amlAlert(b?.seller ?? b?.buyer ?? '', err.message, { route: 'propose', seller: b?.seller, buyer: b?.buyer });
+        return reply.code(403).send({ error: err.message });
+      }
       reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Propose failed' });
     }
   });
