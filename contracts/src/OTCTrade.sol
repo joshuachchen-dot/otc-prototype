@@ -6,25 +6,36 @@ import {FundToken} from "./FundToken.sol";
 import {NAVRegistry} from "./NAVRegistry.sol";
 
 /**
- * OTCTrade — bilateral OTC trade contract with role-based access control.
+ * OTCTrade — bilateral OTC trade contract with role-based access control
+ * and EIP-712 seller consent signatures.
  *
- * Only addresses holding SETTLEMENT_AGENT_ROLE may propose or settle trades.
- * This prevents arbitrary third parties from registering trades against any
- * seller/buyer or forcing settlement without authorization.
+ * Phase 2: propose() requires a valid EIP-712 signature from the seller,
+ * proving on-chain that they consented to the trade before it was registered.
  *
- * Phase 1: settlement agent attests off-chain seller consent before proposing.
- * Phase 2: replace with on-chain EIP-712 seller signature in propose().
- *
- * Three settlement outcomes are possible:
- *   1. Both conditions met   → Trade.status = Settled
- *   2. Seller lacks tokens   → revert "SELLER_INSUFFICIENT_BALANCE"
- *   3. NAV below floor       → revert "NAV_BELOW_FLOOR"
+ * Settlement enforces four conditions atomically:
+ *   1. Trade is Pending
+ *   2. Trade has not expired (MAX_TRADE_AGE)
+ *   3. Seller balance >= amount
+ *   4. NAV is fresh (<= MAX_NAV_AGE) and >= navFloor
  */
 contract OTCTrade is AccessControl {
     bytes32 public constant SETTLEMENT_AGENT_ROLE = keccak256("SETTLEMENT_AGENT_ROLE");
 
-    // NAV must have been posted within this window for settlement to proceed
-    uint256 public constant MAX_NAV_AGE = 24 hours;
+    uint256 public constant MAX_NAV_AGE   = 24 hours;
+    uint256 public constant MAX_TRADE_AGE = 7 days;
+
+    // ── EIP-712 ─────────────────────────────────────────────────────────────
+    bytes32 public constant DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+
+    bytes32 public constant PROPOSE_TYPEHASH = keccak256(
+        "ProposeTrade(address seller,address buyer,uint256 amount,uint256 navFloor,uint256 nonce,uint256 deadline)"
+    );
+
+    bytes32 public immutable DOMAIN_SEPARATOR;
+
+    mapping(address => uint256) public nonces;
 
     // ── Types ───────────────────────────────────────────────────────────────
     enum Status { Pending, Settled, Cancelled }
@@ -32,8 +43,9 @@ contract OTCTrade is AccessControl {
     struct Trade {
         address seller;
         address buyer;
-        uint256 amount;    // OTCF token units to transfer
-        uint256 navFloor;  // minimum NAV (scaled ×1e6) required to settle
+        uint256 amount;
+        uint256 navFloor;
+        uint256 proposedAt;
         Status  status;
     }
 
@@ -69,33 +81,74 @@ contract OTCTrade is AccessControl {
         navRegistry = NAVRegistry(_navRegistry);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(SETTLEMENT_AGENT_ROLE, msg.sender);
+
+        DOMAIN_SEPARATOR = keccak256(abi.encode(
+            DOMAIN_TYPEHASH,
+            keccak256("OTCTrade"),
+            keccak256("1"),
+            block.chainid,
+            address(this)
+        ));
     }
 
     // ── Propose ─────────────────────────────────────────────────────────────
     /**
-     * Register a new trade proposal. Restricted to SETTLEMENT_AGENT_ROLE.
-     * The agent is responsible for obtaining and recording off-chain seller
-     * consent before calling this function (Phase 1). On-chain EIP-712
-     * seller signature verification will be added in Phase 2.
+     * Register a trade proposal. Restricted to SETTLEMENT_AGENT_ROLE.
+     * Requires a valid EIP-712 signature from the seller over the trade
+     * parameters, a nonce (replay protection), and a deadline.
+     *
+     * @param seller   Token seller
+     * @param buyer    Token buyer
+     * @param amount   OTCF units to transfer
+     * @param navFloor Minimum NAV (×1e6) at settlement
+     * @param nonce    Seller's current nonce (fetch via nonces(seller))
+     * @param deadline Unix timestamp after which the signature is invalid
+     * @param v        Signature component
+     * @param r        Signature component
+     * @param s        Signature component
      */
     function propose(
         address seller,
         address buyer,
         uint256 amount,
-        uint256 navFloor
+        uint256 navFloor,
+        uint256 nonce,
+        uint256 deadline,
+        uint8   v,
+        bytes32 r,
+        bytes32 s
     ) external onlyRole(SETTLEMENT_AGENT_ROLE) returns (uint256 id) {
-        require(amount > 0,           "ZERO_AMOUNT");
-        require(seller != address(0), "INVALID_SELLER");
-        require(buyer  != address(0), "INVALID_BUYER");
-        require(buyer  != seller,     "SAME_COUNTERPARTY");
+        require(amount > 0,              "ZERO_AMOUNT");
+        require(seller != address(0),    "INVALID_SELLER");
+        require(buyer  != address(0),    "INVALID_BUYER");
+        require(buyer  != seller,        "SAME_COUNTERPARTY");
+        require(block.timestamp <= deadline, "SIGNATURE_EXPIRED");
+        require(nonces[seller] == nonce,     "INVALID_NONCE");
+
+        // Verify seller's EIP-712 signature
+        bytes32 structHash = keccak256(abi.encode(
+            PROPOSE_TYPEHASH,
+            seller,
+            buyer,
+            amount,
+            navFloor,
+            nonce,
+            deadline
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        address recovered = ecrecover(digest, v, r, s);
+        require(recovered != address(0) && recovered == seller, "INVALID_SELLER_SIGNATURE");
+
+        nonces[seller]++;
 
         id = tradeCount++;
         trades[id] = Trade({
-            seller:   seller,
-            buyer:    buyer,
-            amount:   amount,
-            navFloor: navFloor,
-            status:   Status.Pending
+            seller:     seller,
+            buyer:      buyer,
+            amount:     amount,
+            navFloor:   navFloor,
+            proposedAt: block.timestamp,
+            status:     Status.Pending
         });
 
         emit TradeProposed(id, seller, buyer, amount, navFloor);
@@ -103,17 +156,17 @@ contract OTCTrade is AccessControl {
 
     // ── Settle ──────────────────────────────────────────────────────────────
     /**
-     * Attempt to settle a pending trade. Restricted to SETTLEMENT_AGENT_ROLE.
-     *
-     * Enforces both conditions atomically:
-     *  1. Sell-side: seller balance >= amount        (SELLER_INSUFFICIENT_BALANCE)
-     *  2. Buy-side:  latestNAV.nav   >= trade.navFloor  (NAV_BELOW_FLOOR)
-     *
-     * On success: burns tokens from seller and mints to buyer.
+     * Settle a pending trade. Restricted to SETTLEMENT_AGENT_ROLE.
+     * Enforces four conditions atomically:
+     *   1. Status == Pending
+     *   2. Trade not expired (MAX_TRADE_AGE = 7 days)
+     *   3. Seller balance >= amount
+     *   4. NAV is fresh (<= MAX_NAV_AGE) and >= navFloor
      */
     function settle(uint256 id) external onlyRole(SETTLEMENT_AGENT_ROLE) {
         Trade storage t = trades[id];
         require(t.status == Status.Pending, "NOT_PENDING");
+        require(block.timestamp - t.proposedAt <= MAX_TRADE_AGE, "TRADE_EXPIRED");
 
         require(
             token.balanceOf(t.seller) >= t.amount,
@@ -128,16 +181,12 @@ contract OTCTrade is AccessControl {
         t.status = Status.Settled;
 
         token.burnFrom(t.seller, t.amount);
-        token.mint(t.buyer,   t.amount);
+        token.mint(t.buyer, t.amount);
 
         emit TradeSettled(id, nav.nav, t.seller, t.buyer, t.amount);
     }
 
     // ── Cancel ───────────────────────────────────────────────────────────────
-    /**
-     * Cancel a pending trade. Callable by the seller, buyer, or any
-     * settlement agent — so either counterparty or the platform can cancel.
-     */
     function cancel(uint256 id, string calldata reason) external {
         Trade storage t = trades[id];
         require(t.status == Status.Pending, "NOT_PENDING");
