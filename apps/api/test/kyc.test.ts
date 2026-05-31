@@ -14,6 +14,18 @@ jest.unstable_mockModule('../src/env', () => ({
   },
 }));
 
+// ── Mock chain so token.write.setWhitelisted doesn't hit a real node ────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockSetWhitelisted = jest.fn() as any;
+
+jest.unstable_mockModule('../src/chain', () => ({
+  token: { write: { setWhitelisted: mockSetWhitelisted } },
+  otcTrade: {},
+  nav: {},
+  rpc: {},
+  wallet: {},
+}));
+
 // ── Mock db/client BEFORE importing any route that uses it ───────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockQuery = jest.fn() as any;
@@ -37,6 +49,8 @@ afterAll(() => app.close());
 
 beforeEach(() => {
   mockQuery.mockReset();
+  mockSetWhitelisted.mockReset();
+  mockSetWhitelisted.mockResolvedValue('0xdeadbeef');
 });
 
 // ── POST /kyc/mark-eligible ──────────────────────────────────────────────────
