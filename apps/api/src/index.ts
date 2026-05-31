@@ -11,6 +11,7 @@ import risk from './routes/risk.js';
 import audit from './routes/audit.js';
 import market from './routes/market.js';
 import otc from './routes/otc.js';
+import sanctions from './routes/sanctions.js';
 import { startNavScheduler } from './jobs/navScheduler.js';
 
 // Global BigInt -> string fallback so JSON.stringify never throws on BigInt values
@@ -56,6 +57,7 @@ await app.register(risk);
 await app.register(audit);
 await app.register(market);
 await app.register(otc);
+await app.register(sanctions);
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.setErrorHandler((err, _req, reply) => {

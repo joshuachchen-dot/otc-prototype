@@ -25,3 +25,13 @@ create table if not exists aml_transactions (
 
 create index if not exists aml_transactions_address_ts
     on aml_transactions (address, ts);
+
+-- Sanctions blocklist: complements the static OFAC list in code.
+-- Managed by compliance ops via POST /sanctions/block (admin only).
+create table if not exists sanctions_blocklist (
+    id      serial primary key,
+    address text unique not null,
+    reason  text not null,
+    active  boolean not null default true,
+    added_at timestamptz not null default now()
+);

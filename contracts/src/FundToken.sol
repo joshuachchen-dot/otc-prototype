@@ -34,8 +34,8 @@ contract FundToken is ERC20, Pausable, AccessControl {
 
     function _update(address from, address to, uint256 value) internal override {
         if (paused()) revert("PAUSED");
-        // Optional: enforce receiver whitelist for p2p transfers (not during mint/burn)
-        if (from != address(0) && to != address(0)) {
+        // Enforce receiver whitelist on all transfers and mints (burns are exempt: to == 0)
+        if (to != address(0)) {
             require(whitelist[to], "RECEIVER_NOT_WHITELISTED");
         }
         super._update(from, to, value);
