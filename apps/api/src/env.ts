@@ -31,6 +31,10 @@ const EnvSchema = z.object({
   // AML thresholds (token units, 18 decimals). Defaults: 10k and 50k OTCF.
   AML_MAX_TX:       z.coerce.bigint().default(10_000n * 10n ** 18n),
   AML_VELOCITY_24H: z.coerce.bigint().default(50_000n * 10n ** 18n),
+  // Sanctions screening provider. Leave unset to use static blocklist only.
+  // Provider must accept POST { address } and return { blocked, reason? }.
+  SANCTIONS_API_URL: z.string().url().optional(),
+  SANCTIONS_API_KEY: z.string().optional(),
 });
 
 /**

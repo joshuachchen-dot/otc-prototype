@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAddress } from 'viem';
 import { kycMark, kycGet } from '../db/kyc.js';
+import { token } from '../chain.js';
 import { requireApiKey } from '../middleware/auth.js';
 
 export default async function (app: FastifyInstance) {
@@ -13,6 +14,8 @@ export default async function (app: FastifyInstance) {
       }).parse(req.body);
 
       await kycMark(body.address, body.vcHash);
+      // Sync on-chain whitelist so FundToken enforces KYC at the contract level
+      await token.write.setWhitelisted([body.address as `0x${string}`, true]);
       return { ok: true };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });

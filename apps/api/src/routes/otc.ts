@@ -5,6 +5,7 @@ import { otcTrade, token, nav } from '../chain.js';
 import { requireApiKey } from '../middleware/auth.js';
 import { kycIsEligible } from '../db/kyc.js';
 import { amlCheckSize, amlCheckVelocity, amlRecord, amlAlert } from '../db/aml.js';
+import { sanctionsCheck, SanctionsHit } from '../db/sanctions.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema  = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
@@ -84,6 +85,8 @@ export default async function (app: FastifyInstance) {
       if (!await kycIsEligible(body.seller)) {
         return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: seller address has not completed KYC' });
       }
+      await sanctionsCheck(body.seller);
+      await sanctionsCheck(body.buyer);
 
       const amt = BigInt(body.amount);
       amlCheckSize(amt);
@@ -109,6 +112,7 @@ export default async function (app: FastifyInstance) {
       return { tx, id };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
+      if (err instanceof SanctionsHit) return reply.code(403).send({ error: err.message });
       if (err.message?.startsWith('AML_')) {
         const b = req.body as any;
         await amlAlert(b?.seller ?? b?.buyer ?? '', err.message, { route: 'propose', seller: b?.seller, buyer: b?.buyer });
@@ -164,6 +168,12 @@ export default async function (app: FastifyInstance) {
 
       const { scenario, seller, buyer } = body;
       const results: string[] = [];
+
+      // Ensure both parties are on-chain whitelisted (required since FundToken
+      // now enforces whitelist on mint, not just p2p transfers).
+      await token.write.setWhitelisted([seller as `0x${string}`, true]);
+      await token.write.setWhitelisted([buyer  as `0x${string}`, true]);
+      results.push(`Whitelisted seller and buyer on-chain`);
 
       // Reset seller balance so each scenario starts from a known state.
       // Without this, leftover tokens from prior runs accumulate and can

@@ -5,6 +5,7 @@ import { token } from '../chain.js';
 import { requireApiKey } from '../middleware/auth.js';
 import { kycIsEligible } from '../db/kyc.js';
 import { amlCheckSize, amlCheckVelocity, amlRecord, amlAlert } from '../db/aml.js';
+import { sanctionsCheck, SanctionsHit } from '../db/sanctions.js';
 
 const addressSchema = z.string().refine(isAddress, 'Invalid Ethereum address');
 const amountSchema = z.string().regex(/^\d+$/, 'amount must be a non-negative integer string');
@@ -17,6 +18,7 @@ export default async function (app: FastifyInstance) {
       if (!await kycIsEligible(body.to)) {
         return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: address has not completed KYC' });
       }
+      await sanctionsCheck(body.to);
 
       const amt = BigInt(body.amount);
       amlCheckSize(amt);
@@ -27,6 +29,7 @@ export default async function (app: FastifyInstance) {
       return { tx };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
+      if (err instanceof SanctionsHit) return reply.code(403).send({ error: err.message });
       if (err.message?.startsWith('AML_')) {
         await amlAlert((req.body as any)?.to ?? '', err.message, { route: 'subscribe' });
         return reply.code(403).send({ error: err.message });
@@ -42,6 +45,7 @@ export default async function (app: FastifyInstance) {
       if (!await kycIsEligible(body.from)) {
         return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: address has not completed KYC' });
       }
+      await sanctionsCheck(body.from);
 
       const amt = BigInt(body.amount);
       amlCheckSize(amt);
@@ -52,6 +56,7 @@ export default async function (app: FastifyInstance) {
       return { tx };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
+      if (err instanceof SanctionsHit) return reply.code(403).send({ error: err.message });
       if (err.message?.startsWith('AML_')) {
         await amlAlert((req.body as any)?.from ?? '', err.message, { route: 'redeem' });
         return reply.code(403).send({ error: err.message });
