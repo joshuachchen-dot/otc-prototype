@@ -11,18 +11,31 @@ const amountSchema  = z.string().regex(/^\d+$/, 'amount must be a non-negative i
 
 const STATUS_LABELS = ['Pending', 'Settled', 'Cancelled'] as const;
 
-function formatTrade(raw: readonly [string, string, bigint, bigint, number]) {
-  const [seller, buyer, amount, navFloor, status] = raw;
+function formatTrade(raw: readonly [string, string, bigint, bigint, bigint, number]) {
+  const [seller, buyer, amount, navFloor, proposedAt, status] = raw;
   return {
     seller,
     buyer,
-    amount:   amount.toString(),
-    navFloor: navFloor.toString(),
-    status:   STATUS_LABELS[status] ?? 'Unknown',
+    amount:     amount.toString(),
+    navFloor:   navFloor.toString(),
+    proposedAt: proposedAt.toString(),
+    status:     STATUS_LABELS[status] ?? 'Unknown',
   };
 }
 
 export default async function (app: FastifyInstance) {
+  // ── GET /otc/nonce/:address ────────────────────────────────────────────────
+  app.get('/otc/nonce/:address', async (req, reply) => {
+    try {
+      const { address } = req.params as { address: string };
+      if (!isAddress(address)) return reply.code(400).send({ error: 'Invalid Ethereum address' });
+      const nonce = await otcTrade.read.nonces([address as `0x${string}`]);
+      return { address, nonce: nonce.toString() };
+    } catch (err: any) {
+      reply.code(500).send({ error: err.shortMessage ?? err.message ?? 'Nonce lookup failed' });
+    }
+  });
+
   // ── GET /otc/trade/:id ─────────────────────────────────────────────────────
   app.get('/otc/trade/:id', async (req, reply) => {
     try {

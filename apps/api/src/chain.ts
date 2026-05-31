@@ -47,11 +47,12 @@ export const token = getContract({
 export const otcTrade = getContract({
   address: ENV.OTC_TRADE_ADDRESS as `0x${string}`,
   abi: parseAbi([
-    'function propose(address seller, address buyer, uint256 amount, uint256 navFloor) external returns (uint256)',
+    'function propose(address seller, address buyer, uint256 amount, uint256 navFloor, uint256 nonce, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external returns (uint256)',
     'function settle(uint256 id) external',
     'function cancel(uint256 id, string reason) external',
-    'function getTrade(uint256 id) view returns (address seller, address buyer, uint256 amount, uint256 navFloor, uint8 status)',
+    'function getTrade(uint256 id) view returns (address seller, address buyer, uint256 amount, uint256 navFloor, uint256 proposedAt, uint8 status)',
     'function tradeCount() view returns (uint256)',
+    'function nonces(address seller) view returns (uint256)',
     'event TradeProposed(uint256 indexed id, address indexed seller, address indexed buyer, uint256 amount, uint256 navFloor)',
     'event TradeSettled(uint256 indexed id, uint256 navAtSettlement, address seller, address buyer, uint256 amount)',
     'event TradeCancelled(uint256 indexed id, string reason)',
