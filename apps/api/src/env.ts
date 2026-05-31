@@ -19,9 +19,15 @@ const EnvSchema = z.object({
   OTC_TRADE_ADDRESS: z.string().refine(isAddress, "Invalid address"),
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().optional(),
-  // When set, all mutating and sensitive API routes require X-Api-Key header.
+  // Comma-separated list of valid API keys. Supports multiple clients.
+  // API_KEY (singular) is accepted for backward compatibility.
   // Leave unset in local dev; always set in any deployed environment.
-  API_KEY: z.string().min(16).optional(),
+  API_KEY:  z.string().min(16).optional(),
+  API_KEYS: z.string().optional(),
+  // Allowed CORS origin for the web app. Defaults to localhost in dev.
+  CORS_ORIGIN: z.string().url().optional(),
+  // Rate limit: max requests per minute per IP on sensitive routes.
+  RATE_LIMIT_RPM: z.coerce.number().int().positive().default(60),
   // AML thresholds (token units, 18 decimals). Defaults: 10k and 50k OTCF.
   AML_MAX_TX:       z.coerce.bigint().default(10_000n * 10n ** 18n),
   AML_VELOCITY_24H: z.coerce.bigint().default(50_000n * 10n ** 18n),
