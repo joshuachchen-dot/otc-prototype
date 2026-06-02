@@ -24,7 +24,7 @@ const SCENARIOS: ScenarioDef[] = [
     description:
       "Seller holds 1,000 OTCF (well above the 500 trade amount). " +
       "NAV is posted at $3,000, above the $2,000 floor required by the trade terms. " +
-      "Both conditions are satisfied → trade settles.",
+      "Both conditions are satisfied — trade settles.",
     sellCondition: "Seller balance = 1,000 OTCF ≥ 500 OTCF required",
     buyCondition:  "NAV = $3,000 ≥ $2,000 floor",
     expectedOutcome: "success",
@@ -36,7 +36,7 @@ const SCENARIOS: ScenarioDef[] = [
     description:
       "Seller holds only 100 OTCF, below the 500 required. " +
       "NAV is fine at $3,000. The contract rejects settlement because the " +
-      "sell-side term is not met → SELLER_INSUFFICIENT_BALANCE.",
+      "sell-side term is not met — SELLER_INSUFFICIENT_BALANCE.",
     sellCondition: "Seller balance = 100 OTCF < 500 OTCF required ✗",
     buyCondition:  "NAV = $3,000 ≥ $2,000 floor ✓",
     expectedOutcome: "sell-fail",
@@ -47,7 +47,7 @@ const SCENARIOS: ScenarioDef[] = [
     title: "Scenario 3 — Buy-Side Fail (NAV below floor)",
     description:
       "Seller holds 1,000 OTCF (sufficient). NAV is only $1,500, below the " +
-      "$2,000 floor in the buy-side contract terms. The contract rejects → NAV_BELOW_FLOOR.",
+      "$2,000 floor in the buy-side contract terms. The contract rejects — NAV_BELOW_FLOOR.",
     sellCondition: "Seller balance = 1,000 OTCF ≥ 500 OTCF required ✓",
     buyCondition:  "NAV = $1,500 < $2,000 floor ✗",
     expectedOutcome: "buy-fail",
@@ -57,8 +57,6 @@ const SCENARIOS: ScenarioDef[] = [
 
 type TradeResult = { id: number; seller: string; buyer: string; amount: string; navFloor: string; status: string };
 type StepLog     = { label: string; value: string; ok: boolean };
-
-const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; color: string }> = {
@@ -102,23 +100,18 @@ function TradeCard({ trade }: { trade: TradeResult }) {
 }
 
 export default function OTCPage() {
-  const [running, setRunning] = useState<1 | 2 | 3 | null>(null);
-  const [logs, setLogs]       = useState<Record<number, StepLog[]>>({});
-  const [trades, setTrades]   = useState<Record<number, TradeResult>>({});
+  const [running,  setRunning]  = useState<1 | 2 | 3 | null>(null);
+  const [logs,     setLogs]     = useState<Record<number, StepLog[]>>({});
+  const [trades,   setTrades]   = useState<Record<number, TradeResult>>({});
   const [outcomes, setOutcomes] = useState<Record<number, { ok: boolean; msg: string }>>({});
 
   const hasAnyResults = Object.keys(logs).length > 0 || Object.keys(outcomes).length > 0;
 
-  function resetAll() {
-    setLogs({});
-    setTrades({});
-    setOutcomes({});
-  }
+  function resetAll() { setLogs({}); setTrades({}); setOutcomes({}); }
 
   function clearScenario(id: number) {
-    setLogs((p)     => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id)));
-    setTrades((p)   => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id)));
-    setOutcomes((p) => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id)));
+    const drop = (p: Record<number, unknown>) => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== id));
+    setLogs(drop as any); setTrades(drop as any); setOutcomes(drop as any);
   }
 
   function addLog(scenario: number, log: StepLog) {
@@ -127,8 +120,8 @@ export default function OTCPage() {
 
   async function runScenario(s: ScenarioDef) {
     setRunning(s.id);
-    setLogs((p)     => ({ ...p, [s.id]: [] }));
-    setTrades((p)   => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== s.id)));
+    setLogs((p) => ({ ...p, [s.id]: [] }));
+    setTrades((p) => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== s.id)));
     setOutcomes((p) => Object.fromEntries(Object.entries(p).filter(([k]) => Number(k) !== s.id)));
 
     try {
@@ -157,123 +150,117 @@ export default function OTCPage() {
       const tradeRes  = await fetch(API(`/otc/trade/${tradeId}`));
       const tradeData = await tradeRes.json();
       setTrades((p) => ({ ...p, [s.id]: { id: tradeId, ...tradeData } }));
-
     } catch (err: any) {
       addLog(s.id, { label: "Error", value: err.message ?? String(err), ok: false });
       setOutcomes((p) => ({ ...p, [s.id]: { ok: false, msg: err.message ?? "Unexpected error" } }));
-    } finally {
-      setRunning(null);
-    }
+    } finally { setRunning(null); }
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", padding: "0 20px", fontFamily: ff }}>
+    <div style={{ background: "#f5f5f7", minHeight: "100vh", padding: "48px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
 
-      {/* Sandbox banner */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 10, background: "#fefce8", border: "1px solid #fde047", marginBottom: 28, fontSize: 13, color: "#713f12" }}>
-        <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.08em", background: "#fde047", color: "#713f12", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
-          SANDBOX
-        </span>
-        <span>Isolated demo environment. All transactions run against a throwaway test chain — no real assets, no production data.</span>
-      </div>
-
-      {/* Header */}
-      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", marginBottom: 4 }}>OTC Trade Simulator</h1>
-          <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
-            Three bilateral trade scenarios — conditions enforced atomically on-chain by{" "}
-            <code style={{ background: "#f3f4f6", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code>.
-          </p>
-        </div>
-        {hasAnyResults && (
-          <button onClick={resetAll} style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", color: "#374151", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
-            Reset All
-          </button>
-        )}
-      </div>
-
-      {/* Trade params */}
-      <div style={{ padding: "12px 16px", borderRadius: 10, background: "#f0f9ff", border: "1px solid #bae6fd", fontSize: 13, color: "#0369a1", marginBottom: 28, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px" }}>
-        <div><b>Seller</b> — Anvil #1: {SELLER.slice(0, 10)}…</div>
-        <div><b>Buyer</b>  — Anvil #2: {BUYER.slice(0, 10)}…</div>
-        <div><b>Trade amount:</b> 500 OTCF</div>
-        <div><b>NAV floor (buy-side term):</b> $2,000</div>
-      </div>
-
-      {/* Scenarios */}
-      {SCENARIOS.map((s) => {
-        const isBusy       = running === s.id;
-        const outcome      = outcomes[s.id];
-        const scenarioLogs = logs[s.id] ?? [];
-        const trade        = trades[s.id];
-        const outcomeColor = s.expectedOutcome === "success"
-          ? { bg: "#dcfce7", border: "#86efac", text: "#15803d" }
-          : { bg: "#fee2e2", border: "#fca5a5", text: "#b91c1c" };
-
-        return (
-          <div key={s.id} style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 24, background: "white", marginBottom: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 800, color: "#111", marginBottom: 4 }}>{s.title}</div>
-                <p style={{ fontSize: 13, color: "#666", margin: 0 }}>{s.description}</p>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                {outcome && !isBusy && (
-                  <button onClick={() => clearScenario(s.id)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", color: "#374151", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    Clear
-                  </button>
-                )}
-                <button
-                  onClick={() => runScenario(s)}
-                  disabled={isBusy || running !== null}
-                  style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: isBusy || running !== null ? "#d1d5db" : "#111", color: "white", fontWeight: 700, fontSize: 13, cursor: isBusy || running !== null ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
-                >
-                  {isBusy ? "Running…" : "Run"}
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-              {[{ label: "Sell-side condition", value: s.sellCondition }, { label: "Buy-side condition", value: s.buyCondition }].map(({ label, value }) => (
-                <div key={label} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", fontSize: 12 }}>
-                  <div style={{ color: "#888", marginBottom: 3, fontWeight: 600 }}>{label}</div>
-                  <div style={{ color: "#111" }}>{value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ padding: "8px 12px", borderRadius: 8, background: outcomeColor.bg, border: `1px solid ${outcomeColor.border}`, color: outcomeColor.text, fontSize: 12, fontWeight: 600, marginBottom: scenarioLogs.length > 0 ? 12 : 0 }}>
-              Expected: {s.outcomeLabel}
-            </div>
-
-            {scenarioLogs.length > 0 && (
-              <div style={{ marginTop: 12, border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", background: "#fafafa" }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#555", marginBottom: 6 }}>Execution log</div>
-                {scenarioLogs.map((log, i) => <LogLine key={i} step={log} />)}
-              </div>
-            )}
-
-            {outcome && (
-              <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, background: outcome.ok ? "#dcfce7" : "#fee2e2", color: outcome.ok ? "#15803d" : "#b91c1c", fontWeight: 700, fontSize: 13 }}>
-                {outcome.ok ? "✓ Settled" : "✗ Terminated"} — {outcome.msg}
-              </div>
-            )}
-
-            {trade && <TradeCard trade={trade} />}
+        {/* Page header */}
+        <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[1.4px] mb-3" style={{ color: "#c0c0c8" }}>OTC Settlement</p>
+            <h1 className="font-extrabold text-[#1d1d1f]" style={{ fontSize: 40, letterSpacing: -1.2, lineHeight: 1.1 }}>
+              OTC Trade Settlement
+            </h1>
+            <p className="mt-3 text-[16px] leading-relaxed" style={{ color: "#86868b", maxWidth: 520 }}>
+              Three bilateral trade scenarios — conditions enforced atomically on-chain by{" "}
+              <code style={{ background: "#e8e8ed", padding: "1px 5px", borderRadius: 4 }}>OTCTrade.sol</code>.
+            </p>
           </div>
-        );
-      })}
+          {hasAnyResults && (
+            <button onClick={resetAll} style={{ flexShrink: 0, padding: "9px 16px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", color: "#374151", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              Reset All
+            </button>
+          )}
+        </div>
 
-      {/* How it works */}
-      <div style={{ padding: "16px 20px", border: "1px solid #e5e7eb", borderRadius: 12, background: "#fafafa", fontSize: 13, color: "#555", lineHeight: 1.6 }}>
-        <div style={{ fontWeight: 700, color: "#111", marginBottom: 8 }}>How OTCTrade.sol works</div>
-        <ol style={{ margin: 0, paddingLeft: 18 }}>
-          <li><b>propose()</b> — records seller, buyer, amount, and NAV floor on-chain as immutable trade terms.</li>
-          <li><b>settle()</b> — atomically checks both conditions. If either fails, the entire transaction reverts with the specific reason. No partial execution possible.</li>
-          <li>On success: <code>burnFrom(seller)</code> + <code>mint(buyer)</code> in the same transaction.</li>
-          <li><b>cancel()</b> — either counterparty may cancel a pending trade at any time.</li>
-        </ol>
+        {/* Trade params */}
+        <div style={{ padding: "14px 18px", borderRadius: 14, background: "#fff", border: "1px solid #e5e5ea", fontSize: 13, color: "#555", marginBottom: 32, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px" }}>
+          <div><b>Seller</b> — Account #1: {SELLER.slice(0, 10)}…</div>
+          <div><b>Buyer</b> — Account #2: {BUYER.slice(0, 10)}…</div>
+          <div><b>Trade amount:</b> 500 OTCF</div>
+          <div><b>NAV floor (buy-side term):</b> $2,000</div>
+        </div>
+
+        {/* Scenarios */}
+        {SCENARIOS.map((s) => {
+          const isBusy       = running === s.id;
+          const outcome      = outcomes[s.id];
+          const scenarioLogs = logs[s.id] ?? [];
+          const trade        = trades[s.id];
+          const outcomeColor = s.expectedOutcome === "success"
+            ? { bg: "#dcfce7", border: "#86efac", text: "#15803d" }
+            : { bg: "#fee2e2", border: "#fca5a5", text: "#b91c1c" };
+
+          return (
+            <div key={s.id} style={{ border: "1px solid #e5e5ea", borderRadius: 20, padding: 28, background: "white", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: "#1d1d1f", marginBottom: 5 }}>{s.title}</div>
+                  <p style={{ fontSize: 13, color: "#86868b", margin: 0, lineHeight: 1.6 }}>{s.description}</p>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {outcome && !isBusy && (
+                    <button onClick={() => clearScenario(s.id)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", color: "#374151", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    onClick={() => runScenario(s)}
+                    disabled={isBusy || running !== null}
+                    style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: isBusy || running !== null ? "#d1d5db" : "#1d1d1f", color: "white", fontWeight: 700, fontSize: 13, cursor: isBusy || running !== null ? "not-allowed" : "pointer" }}
+                  >
+                    {isBusy ? "Running…" : "Run"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                {[{ label: "Sell-side condition", value: s.sellCondition }, { label: "Buy-side condition", value: s.buyCondition }].map(({ label, value }) => (
+                  <div key={label} style={{ background: "#f5f5f7", border: "1px solid #e5e5ea", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+                    <div style={{ color: "#86868b", marginBottom: 3, fontWeight: 600 }}>{label}</div>
+                    <div style={{ color: "#1d1d1f" }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ padding: "8px 14px", borderRadius: 8, background: outcomeColor.bg, border: `1px solid ${outcomeColor.border}`, color: outcomeColor.text, fontSize: 12, fontWeight: 600, marginBottom: scenarioLogs.length > 0 ? 14 : 0 }}>
+                Expected: {s.outcomeLabel}
+              </div>
+
+              {scenarioLogs.length > 0 && (
+                <div style={{ marginTop: 14, border: "1px solid #e5e5ea", borderRadius: 10, padding: "12px 14px", background: "#fafafa" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#555", marginBottom: 6 }}>Execution log</div>
+                  {scenarioLogs.map((log, i) => <LogLine key={i} step={log} />)}
+                </div>
+              )}
+
+              {outcome && (
+                <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: outcome.ok ? "#dcfce7" : "#fee2e2", color: outcome.ok ? "#15803d" : "#b91c1c", fontWeight: 700, fontSize: 13 }}>
+                  {outcome.ok ? "Settled" : "Terminated"} — {outcome.msg}
+                </div>
+              )}
+
+              {trade && <TradeCard trade={trade} />}
+            </div>
+          );
+        })}
+
+        {/* How it works */}
+        <div style={{ padding: "20px 24px", border: "1px solid #e5e5ea", borderRadius: 14, background: "#fff", fontSize: 13, color: "#555", lineHeight: 1.7 }}>
+          <div style={{ fontWeight: 700, color: "#1d1d1f", marginBottom: 10, fontSize: 15 }}>How OTCTrade.sol works</div>
+          <ol style={{ margin: 0, paddingLeft: 20 }}>
+            <li><b>propose()</b> — records seller, buyer, amount, and NAV floor on-chain as immutable trade terms.</li>
+            <li><b>settle()</b> — atomically checks both conditions. If either fails, the entire transaction reverts with the specific reason. No partial execution possible.</li>
+            <li>On success: <code>burnFrom(seller)</code> + <code>mint(buyer)</code> in the same transaction.</li>
+            <li><b>cancel()</b> — either counterparty may cancel a pending trade at any time.</li>
+          </ol>
+        </div>
       </div>
     </div>
   );
