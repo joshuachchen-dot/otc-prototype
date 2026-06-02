@@ -45,8 +45,9 @@ export default function InvestorHeroCard() {
             strokeLinejoin="round"
             strokeDasharray={300}
             strokeDashoffset={300}
-            style={{ animation: 'drawLine 1.8s 0.5s ease forwards' }}
-          />
+          >
+            <animate attributeName="stroke-dashoffset" from="300" to="0" dur="1.8s" begin="0.5s" fill="freeze" />
+          </polyline>
         </svg>
       </div>
 

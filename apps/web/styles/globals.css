@@ -10,7 +10,6 @@
   --color-bg-dark-card:   #1d1d1f;
   --color-text-primary:   #1d1d1f;
   --color-text-secondary: #86868b;
-  --color-text-muted:     #445;
   --color-green:          #34c759;
   --color-teal:           #00c9a7;
   --color-indigo:         #6366f1;
@@ -18,8 +17,6 @@
   --color-amber:          #ff9f0a;
   --color-border-light:   #e5e5ea;
   --color-border-subtle:  #f0f0f0;
-  --radius-card:          22px;
-  --radius-pill:          980px;
 
   color-scheme: light;
 }
@@ -31,6 +28,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Transform-only keyframes — autoprefixer-safe */
 @keyframes driftA {
   from { transform: translate(0, 0) scale(1); }
   to   { transform: translate(60px, 40px) scale(1.1); }
@@ -51,9 +49,6 @@ body {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes drawLine {
-  to { stroke-dashoffset: 0; }
-}
 @keyframes growBar {
   from { transform: scaleY(0); opacity: 0; }
   to   { transform: scaleY(1); opacity: 1; }
@@ -62,7 +57,7 @@ body {
   from { opacity: 0.7; }
   to   { opacity: 1.0; }
 }
-@keyframes spin {
+@keyframes spinSlow {
   to { transform: rotate(360deg); }
 }
 @keyframes pendingPulse {

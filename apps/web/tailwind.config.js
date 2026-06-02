@@ -30,7 +30,7 @@ module.exports = {
         'fade-up':    'fadeUp 0.8s ease both',
         'count-up':   'countUp 1.2s ease both',
         'breathe':    'breathe 6s ease-in-out infinite alternate',
-        'spin-slow':  'spin 20s linear infinite',
+        'spin-slow':  'spinSlow 20s linear infinite',
         'pending':    'pendingPulse 2s ease-in-out infinite',
       },
     },

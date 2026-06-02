@@ -24,8 +24,17 @@ export default function Sparkline({
         strokeLinejoin="round"
         strokeDasharray={300}
         strokeDashoffset={300}
-        style={{ animation: `drawLine 1.5s ${delay} ease forwards` }}
-      />
+      >
+        {/* SVG SMIL animation — no CSS/PostCSS required */}
+        <animate
+          attributeName="stroke-dashoffset"
+          from="300"
+          to="0"
+          dur="1.5s"
+          begin={delay}
+          fill="freeze"
+        />
+      </polyline>
     </svg>
   );
 }
