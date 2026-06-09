@@ -24,7 +24,10 @@ if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
 
 export const authOptions: NextAuthOptions = {
   providers,
-  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'archon-dev-secret-do-not-use-in-production',
+  // Use the same AUTH_SECRET as the custom credential flow (auth.ts) so both
+  // systems sign with the same key. Set AUTH_SECRET in .env.local for dev,
+  // and as an env var in production — do not use the fallback in production.
+  secret: process.env.AUTH_SECRET ?? 'archon-dev-secret-do-not-use-in-production',
   pages: {
     signIn:  '/login',
     error:   '/login',

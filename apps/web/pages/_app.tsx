@@ -23,17 +23,18 @@ export default function App({ Component, pageProps }: AppProps) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
+  // Fetch once on mount. Login and logout use window.location for a full reload
+  // so this effect re-runs on those navigations without needing pathname as a dep.
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => r.ok ? r.json() : { user: null })
       .then(d => { setUser(d.user ?? null); setAuthChecked(true); })
       .catch(() => { setUser(null); setAuthChecked(true); });
-  }, [pathname]);
+  }, []);
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
-    setUser(null);
-    router.push('/');
+    window.location.href = '/';
   }
 
   const isPublicPage = PUBLIC_NAV.some(n => n.href === pathname) || pathname === '/login';

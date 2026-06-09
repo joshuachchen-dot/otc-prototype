@@ -68,7 +68,7 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? 'Login failed.'); return; }
       const dest = typeof next === 'string' && next.startsWith('/') ? next : data.redirect;
-      router.push(dest);
+      window.location.href = dest;
     } catch {
       setErr('Network error — is the server running?');
     } finally {
@@ -130,8 +130,8 @@ export default function Login() {
               {/* Google */}
               <div style={{ position: 'relative' }}>
                 <button
-                  onClick={() => googleEnabled && handleSocialLogin('google')}
-                  disabled={socialBusy === 'google'}
+                  onClick={() => handleSocialLogin('google')}
+                  disabled={!googleEnabled || socialBusy === 'google'}
                   title={!googleEnabled ? 'Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local to enable' : undefined}
                   style={{
                     width: '100%',
@@ -162,8 +162,8 @@ export default function Login() {
               {/* Facebook */}
               <div style={{ position: 'relative' }}>
                 <button
-                  onClick={() => facebookEnabled && handleSocialLogin('facebook')}
-                  disabled={socialBusy === 'facebook'}
+                  onClick={() => handleSocialLogin('facebook')}
+                  disabled={!facebookEnabled || socialBusy === 'facebook'}
                   title={!facebookEnabled ? 'Add FACEBOOK_CLIENT_ID and FACEBOOK_CLIENT_SECRET to .env.local to enable' : undefined}
                   style={{
                     width: '100%',
@@ -295,7 +295,7 @@ export default function Login() {
             ))}
 
             <p style={{ fontSize: 12, color: '#c0c0c8', marginTop: 4, lineHeight: 1.6 }}>
-              This is a prototype. Credentials are hardcoded for demo purposes only.
+              Beta access. Credentials are pre-configured for demonstration.
             </p>
           </div>
         </div>

@@ -9,6 +9,8 @@ const PROTECTED: Record<string, string[]> = {
   '/otc':      ['manager'],
 };
 
+// Must read the same env var and fallback as apps/web/lib/auth.ts so both
+// sign and verify with the same key.
 const secret = new TextEncoder().encode(
   process.env.AUTH_SECRET ?? 'archon-dev-secret-do-not-use-in-production'
 );

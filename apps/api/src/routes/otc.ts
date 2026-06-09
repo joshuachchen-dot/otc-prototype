@@ -197,6 +197,9 @@ export default async function (app: FastifyInstance) {
         l.address.toLowerCase() === ENV.OTC_TRADE_ADDRESS.toLowerCase() &&
         l.topics[0] === TRADE_PROPOSED_TOPIC
       );
+      if (!proposedLog) {
+        app.log.warn({ tx, receipt: receipt.transactionHash }, 'TradeProposed event not found in receipt — id will be -1. Verify TRADE_PROPOSED_TOPIC matches the deployed contract.');
+      }
       // topics[1] is the indexed id (padded 32-byte hex)
       const id = proposedLog?.topics[1] ? Number(BigInt(proposedLog.topics[1])) : -1;
       return { tx, id };
