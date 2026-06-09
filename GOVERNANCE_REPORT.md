@@ -1,253 +1,219 @@
 # Enterprise Governance Report
-> Generated: 2026-06-09 UTC (v3)
+> Generated: 2026-06-09 UTC (v4)
 > Project: Archon — Institutional OTC Settlement Platform  
-> Previous Report: 2026-06-09 (v2)
+> Previous Report: 2026-06-09 (v3)
 
 ---
 
 ## Overall Readiness
 
-**Score: ████████░░ 77/100** *(prev: ███████░░░ 72/100 · +5 pts)*
+**Score: ████████░░ 78/100** *(prev: ███████░░░ 77/100 · +1 pt)*
 
-| Domain | Status | Score | Δ from v2 | Δ from May 28 |
-|--------|--------|-------|-----------|---------------|
-| ⚖️ Legal & Compliance | 🟡 MEDIUM | ███████░░░ 72/100 | +4 | +50 |
-| 🔐 Smart Contract Hardening | 🟡 MEDIUM | ███████░░░ 74/100 | -2 | +22 |
-| 🏗️ Infrastructure & DevOps | 🟢 GOOD | ████████░░ 85/100 | +7 | +57 |
-| 🧩 Product Completeness | 🟢 GOOD | ████████░░ 84/100 | +6 | +50 |
-| 📈 Go-to-Market | 🟡 MEDIUM | ███████░░░ 72/100 | +10 | +44 |
+| Domain | Status | Score | Δ v3 | Δ May 28 |
+|--------|--------|-------|------|----------|
+| ⚖️ Legal & Compliance | 🟡 MEDIUM | ███████░░░ 74/100 | +2 | +52 |
+| 🔐 Smart Contract Hardening | 🟡 MEDIUM | ███████░░░ 74/100 | 0 | +22 |
+| 🏗️ Infrastructure & DevOps | 🟢 GOOD | █████████░ 88/100 | +3 | +60 |
+| 🧩 Product Completeness | 🟡 MEDIUM | ████████░░ 81/100 | -3 | +47 |
+| 📈 Go-to-Market | 🟡 MEDIUM | ███████░░░ 75/100 | +3 | +47 |
 
-> ✅ **Infrastructure & DevOps and Product Completeness now GOOD tier (80+).**  
-> ⚠️ Smart Contract Hardening slid -2 on deeper NAV timestamp scrutiny — no code regression, new findings surfaced.  
-> ⚠️ Legal & Compliance +4 from DATABASE_URL hard enforcement; KYC-at-settle gap persists.
+> ✅ Infrastructure & DevOps reaches 88 — highest domain score to date.  
+> ⚠️ Product Completeness slid -3: newly discovered gap — NextAuth social login does not set the `archon_session` cookie, so social-authenticated users fail the Edge middleware check on protected routes.  
+> ⚠️ GTM: `apps/web/components/Layout.tsx` still contains "OTC Fund Prototype" and "thesis prototype demonstration" copy visible on every page.
 
 ---
 
 ## ⚖️ Legal & Compliance
 
-**Readiness: ███████░░░ 72/100 · prev: 68/100 · Δ: +4 · Status: 🟡 MEDIUM**
+**Readiness: ███████░░░ 74/100 · prev: 72/100 · Δ: +2 · Status: 🟡 MEDIUM**
 
 ### Findings
 
 | # | Finding | Previous | Now |
 |---|---------|----------|-----|
-| 1 | KYC gate at mint/subscribe | ✅ FIXED | ✅ Maintained |
-| 2 | KYC gate at propose | ✅ FIXED | ✅ Maintained |
-| 3 | KYC re-check at settle | 🟡 PARTIAL | 🔴 CRITICAL — confirmed absent |
-| 4 | AML size + velocity limits | ✅ FIXED | ✅ Maintained |
-| 5 | Sanctions screening | ✅ FIXED | ✅ Maintained |
-| 6 | Audit trail (NAV, MINT, BURN) | ✅ FIXED | ✅ Maintained |
-| 7 | requireApiKey unauthenticated when unset | 🟡 MEDIUM | 🟡 MEDIUM — deployment checklist only mitigation |
-| 8 | DATABASE_URL optional in production | 🟡 PARTIAL (warning) | ✅ FIXED — process.exit(1) |
-| 9 | Sanctions provider failure fail-open | NEW | 🟡 MEDIUM |
-| 10 | OTC cancel events not audit-logged | NEW | 🟡 MEDIUM |
+| 1 | Cookie missing `Secure` flag in production | 🔴 CRITICAL | ✅ FIXED — conditional `; Secure` when `NODE_ENV=production` |
+| 2 | NextAuth secret diverging from custom auth secret | 🟠 HIGH | ✅ FIXED — both flows now use `AUTH_SECRET` only |
+| 3 | KYC re-check at `/otc/settle` | 🔴 CRITICAL | 🔴 STILL ABSENT |
+| 4 | Sanctions provider failure is fail-open | 🟡 MEDIUM | 🟡 STILL PRESENT |
+| 5 | OTC cancel not audit-logged | 🟡 MEDIUM | 🟡 STILL ABSENT |
 
 ### Remaining Issues
 
 #### 🔴 [CRITICAL] /otc/settle missing KYC + sanctions re-validation
-Between proposal and settlement (up to 7 days), a buyer's KYC eligibility or sanctions status can change. Neither check is re-run at settlement time. A sanctioned address that was eligible at proposal can receive tokens.
+No re-check of buyer/seller KYC eligibility or sanctions status at settlement time. A 7-day window exists between proposal and settlement during which status can change.
 
-#### 🟡 [MEDIUM] Sanctions provider failure is fail-open
-External sanctions API errors return success — a network outage silently bypasses screening. Should be fail-closed in production.
+#### 🟡 [MEDIUM] Sanctions provider fail-open
+External sanctions API errors silently return success — a provider outage allows blocked addresses through.
 
-#### 🟡 [MEDIUM] OTC trade cancellations not audit-logged
-`/otc/cancel` has no audit trail entry. Cancelled trades are invisible in the compliance CSV export.
-
-#### 🟡 [MEDIUM] requireApiKey bypasses auth when no key configured
-Deployment checklist must mandate `API_KEY` — the API does not refuse to start without it (only `/otc/settle` should block production launch without a key, because the production fail-closed path depends on it).
+#### 🟡 [MEDIUM] Cancel endpoint not audit-logged
+`/otc/cancel` has no `amlAlert()` call or audit log entry. Cancellations are invisible in the compliance CSV export.
 
 ### Score Justification
-DATABASE_URL enforcement (+4) is the only structural change since v2. The KYC-at-settle gap is confirmed critical; AML, sanctions, and audit trail all remain solid. Compliance posture is strong at propose time but has a 7-day window vulnerability at settlement.
++2 from two security fixes: Secure cookie flag enforced in production, and AUTH_SECRET unified across custom JWT and NextAuth flows eliminating key-divergence risk. Three compliance gaps remain open and unchanged.
 
 ---
 
 ## 🔐 Smart Contract Hardening
 
-**Readiness: ███████░░░ 74/100 · prev: 76/100 · Δ: -2 · Status: 🟡 MEDIUM**
+**Readiness: ███████░░░ 74/100 · prev: 74/100 · Δ: 0 · Status: 🟡 MEDIUM**
 
-### Findings
-
-| # | Finding | Previous | Now |
-|---|---------|----------|-----|
-| 1 | propose() permissionless | ✅ FIXED | ✅ Maintained |
-| 2 | No seller consent mechanism | ✅ FIXED | ✅ Maintained — EIP-712 correct, nonces verified |
-| 3 | No trade deadline | ✅ FIXED | ✅ MAX_TRADE_AGE (7 days) maintained |
-| 4 | No NAV ceiling | 🟡 PARTIAL (floor only) | 🟠 HIGH — deeper audit confirms no ceiling implemented |
-| 5 | Stale NAV risk | ✅ FIXED | ✅ MAX_NAV_AGE (24h) maintained |
-| 6 | burnFrom() bypassed allowance | ✅ FIXED | ✅ Maintained |
-| 7 | OTCTrade not independently pausable | 🟡 MEDIUM | 🟡 MEDIUM — unchanged |
-| 8 | NAVRegistry accepts arbitrary asOf | 🟡 MEDIUM | 🔴 CRITICAL — no validation: asOf can be future-dated or zero |
-| 9 | AccessRoles.sol unused stub | 🟡 LOW | 🟡 LOW — unchanged |
-| 10 | OTCTrade zero test coverage | ✅ FIXED | ✅ 49 tests maintained; NAV timestamp edge cases missing |
-
-### Remaining Issues
-
-#### 🔴 [HIGH] NAVRegistry.postNAV() accepts arbitrary asOf timestamps
-No validation that `asOf <= block.timestamp` or that values are monotonically increasing. A manager can post future-dated or backdated NAVs, corrupting the audit trail and potentially manipulating settlement prices.
-
-#### 🟠 [HIGH] No navCeiling in OTCTrade
-Only a floor is enforced at settlement. Seller is exposed to unlimited upside NAV movement post-signature — asymmetric price risk that institutional counterparties will reject.
-
-#### 🟡 [MEDIUM] OTCTrade not independently pausable
-Halting OTC settlement requires pausing the entire FundToken (blocking all mint/burn/transfer). No surgical emergency stop at the trade layer.
-
-#### 🟡 [LOW] AccessRoles.sol is dead code
-Defines role constants never imported by any deployed contract. Delete or document as deprecated.
+No contract changes since v3. All controls verified intact:
+- ✅ EIP-712 seller consent — DOMAIN_SEPARATOR, PROPOSE_TYPEHASH, signature + nonce verified
+- ✅ SETTLEMENT_AGENT_ROLE enforced on `propose()` and `settle()`
+- ✅ NAV floor check present in `settle()`
+- ✅ MAX_NAV_AGE (24h) freshness check present
+- ✅ MAX_TRADE_AGE (7 days) expiry enforced
+- ✅ 49 test functions — no regression
+- ⚠️ NAVRegistry `asOf` validation still absent (known open issue)
+- ⚠️ No `navCeiling` — asymmetric price protection (known open issue)
+- ⚠️ OTCTrade not independently pausable (known open issue)
 
 ### Score Justification
--2 reflects deeper scrutiny surfacing two HIGH gaps that were not resolved in prior sessions: NAVRegistry timestamp validation is entirely absent (asOf can be any value), and the navCeiling omission creates asymmetric price risk. No code regressed — this is a more rigorous reading of institutional requirements. EIP-712 seller consent and all access control remain correct.
+Score unchanged. No regressions found. Known open issues (NAV ceiling, asOf validation, OTCTrade pausable) remain and require dedicated smart contract work.
 
 ---
 
 ## 🏗️ Infrastructure & DevOps
 
-**Readiness: ████████░░ 85/100 · prev: 78/100 · Δ: +7 · Status: 🟢 GOOD**
+**Readiness: █████████░ 88/100 · prev: 85/100 · Δ: +3 · Status: 🟢 GOOD**
 
 ### Findings
 
 | # | Finding | Previous | Now |
 |---|---------|----------|-----|
-| 1 | No Dockerfile | Reported as STILL PRESENT | ✅ CONFIRMED EXISTS — multi-stage API + Web Dockerfiles |
-| 2 | docker-compose.yml | Reported as missing | ✅ CONFIRMED EXISTS — healthchecks, depends_on ordering |
-| 3 | DATABASE_URL optional (warning only) | 🟡 PARTIAL | ✅ FIXED — process.exit(1) in production |
-| 4 | DEPLOYMENT.md | Not present | ✅ FIXED — 155-line guide: Vercel+Railway, Railway-only, Render |
-| 5 | No cloud deploy configs | Not present | ✅ FIXED — railway.toml, vercel.json, render.yaml all present |
-| 6 | API bound to 127.0.0.1 | ✅ FIXED (prior) | ✅ Maintained — defaults to 0.0.0.0 |
-| 7 | No CI/CD | ✅ FIXED (prior) | ✅ Maintained — 4-job GitHub Actions workflow |
-| 8 | Private key logged to stdout | ✅ FIXED (prior) | ✅ Maintained — first 10 chars only |
-| 9 | CORS hardcoded | ✅ FIXED (prior) | ✅ Maintained — CORS_ORIGIN env var |
-| 10 | start.sh fail-fast | ✅ FIXED (prior) | ✅ Maintained — set -euo pipefail, 30s API readiness gate |
-| 11 | .env in git | 🟠 HIGH | 🟠 HIGH — `.env` file with real Sepolia key confirmed tracked |
+| 1 | `ANVIL_URL` was `http://0.0.0.0:8545` (bind address used as URL) | 🟠 HIGH | ✅ FIXED — `http://localhost:8545` |
+| 2 | pnpm installed globally in Docker production image | 🟡 MEDIUM | ✅ FIXED — dedicated `prod-deps` stage; runner copies node_modules, no pnpm |
+| 3 | TradeProposed event miss was silent | 🟡 MEDIUM | ✅ FIXED — `app.log.warn(...)` with tx hash when event not found in receipt |
+| 4 | Internal planning docs tracked in git | 🟠 HIGH | ✅ FIXED — `docs/superpowers/` in `.gitignore`, files removed from tracking |
+| 5 | `.env` files in git | ✅ Confirmed clean | ✅ Still clean — `git ls-files \| grep .env` returns nothing |
 
 ### Remaining Issues
 
-#### 🟠 [HIGH] .env committed to git with live Sepolia private key
-Root `.env` containing `PRIVATE_KEY` and `RPC_URL` is tracked in version control. Anyone with repo access can drain the Sepolia deployer wallet. Must run `git rm --cached .env` before any external sharing.
+#### 🟡 [MEDIUM] No `.dockerignore`
+Entire repo is copied to Docker build context. `node_modules/`, test files, and dev secrets are included unnecessarily.
 
-#### 🟡 [MEDIUM] No CI test coverage threshold
-CI runs `pnpm test` but has no minimum coverage enforcement. A PR that removes tests silently passes.
+#### 🟡 [MEDIUM] Docker containers run as root
+No `USER` directive in either Dockerfile. Add a non-root `node` user in the runner stage.
 
-#### 🟡 [MEDIUM] No staging environment in deployment configs
-Vercel/Railway configs assume production-only. No preview branch or staging slot documented.
+#### 🟡 [MEDIUM] No database persistence in Docker Compose dev setup
+KYC/AML data lives in-process memory unless `DATABASE_URL` is configured. Production blocks startup, but local Docker Compose falls back to in-memory without the Postgres service.
+
+#### 🟡 [LOW] `node:20-alpine` base image not pinned to a digest
+Floating tag means rebuilds may silently pull a different image. Pin to a SHA for reproducible production builds.
 
 ### Score Justification
-+7 from: (a) DATABASE_URL now hard-exits in production, (b) Dockerfiles confirmed present with multi-stage builds, (c) DEPLOYMENT.md covering all three platforms with secret generation instructions. No critical gaps remain. The .env-in-git issue is the one outstanding HIGH item — important to fix before any external sharing but does not block local development.
++3 from three targeted fixes: ANVIL_URL corrected, production Docker image no longer carries pnpm overhead, and event-miss logging adds operational visibility. All previously reported critical items resolved. Four medium/low issues remain — none block deployment.
 
 ---
 
 ## 🧩 Product Completeness
 
-**Readiness: ████████░░ 84/100 · prev: 78/100 · Δ: +6 · Status: 🟢 GOOD**
+**Readiness: ████████░░ 81/100 · prev: 84/100 · Δ: -3 · Status: 🟡 MEDIUM**
 
 ### Findings
 
 | # | Finding | Previous | Now |
 |---|---------|----------|-----|
-| 1 | No auth / RBAC | ✅ FIXED | ✅ Maintained — JWT + Edge middleware + role guards |
-| 2 | Login portal | ✅ FIXED | ✅ Maintained — credentials + social login scaffolding |
-| 3 | Investor portal | ✅ FIXED | ✅ Complete — subscribe, redeem, balance, risk status |
-| 4 | Manager portal | ✅ FIXED | ✅ Complete — post NAV, monitor fund |
-| 5 | Auditor portal | ✅ FIXED | ✅ Complete — download CSV audit export |
-| 6 | OTC settlement page | ✅ FIXED | ✅ Three interactive Sepolia scenarios |
-| 7 | Market data page | ✅ FIXED | ✅ Live ETH/BTC, 60s auto-refresh |
-| 8 | Public marketing pages | ✅ FIXED | ✅ Five pages — Home, About, Why On-Chain, Platform, Contact |
-| 9 | Google/Facebook OAuth | NEW | ✅ Configured in NextAuth; gracefully inactive without env vars |
-| 10 | Nav order corrected | NEW | ✅ Home → About → Why On-Chain → How It Works → Contact |
-| 11 | KYC management UI | 🟡 PARTIAL | 🟡 API-only — no compliance officer UI |
-| 12 | Transaction history page | ⚠️ NOT PRESENT | ⚠️ NOT PRESENT |
-| 13 | OTC cancel button in UI | 🟡 PARTIAL | 🟡 Backend exists, no UI trigger |
+| 1 | Social button onclick guard (redundant `enabled &&`) | 🟡 MINOR | ✅ FIXED — `disabled={!enabled \|\| busy}` prop; accessible |
+| 2 | Auth fetch re-ran on every route change | 🟡 MINOR | ✅ FIXED — once on mount; login/logout use `window.location.href` |
+| 3 | NextAuth social login flow broken with custom middleware | NEW | 🔴 CRITICAL — social users authenticated by NextAuth but fail `archon_session` cookie check |
+
+### Critical New Finding
+
+#### 🔴 [CRITICAL] Social login does not set `archon_session` cookie
+When a user signs in via Google or Facebook, NextAuth creates its own session token but never writes the `archon_session` httpOnly cookie that `middleware.ts` checks. Social-authenticated users hit protected routes and are immediately redirected back to `/login`. The credential login path is unaffected.
+
+**Fix:** Add a NextAuth `signIn` or `jwt` callback in `[...nextauth].ts` that writes the `archon_session` cookie with the same HS256 JWT format as the credential path, OR update `middleware.ts` to also accept NextAuth's `next-auth.session-token` cookie as valid.
 
 ### Remaining Gaps
-
-- No KYC/AML management UI for compliance officers (admin panel)
-- No investor transaction history or portfolio history page
-- No user profile / settings page
-- No API documentation (Swagger/OpenAPI)
-- OTC cancel has no UI button — only accessible via API
-- Social login assigns investor role only — no admin-role assignment flow
+- Social login → protected route flow broken (must fix before enabling OAuth)
+- No KYC/AML management UI for compliance officers
+- No investor transaction history page
+- No OTC cancel button in UI
+- Social users hardcoded to `investor` role — no admin-role allowlist implemented
 
 ### Score Justification
-+6 from social login scaffolding (now properly configured with graceful fallback), corrected nav order, and deeper audit confirming all five portals are complete. Score of 84 reflects a polished, fully functional demo with a small set of enhancement-level gaps (KYC UI, portfolio history) rather than functional holes.
+−3 net: the two UX fixes are correct (+1 notional), but the NextAuth integration gap is a functional breakage for the social login feature (−4). The gap was structurally always present but not previously identified because OAuth credentials are not configured in any deployed environment.
 
 ---
 
 ## 📈 Go-to-Market
 
-**Readiness: ███████░░░ 72/100 · prev: 62/100 · Δ: +10 · Status: 🟡 MEDIUM**
+**Readiness: ███████░░░ 75/100 · prev: 72/100 · Δ: +3 · Status: 🟡 MEDIUM**
 
 ### Findings
 
 | # | Finding | Previous | Now |
 |---|---------|----------|-----|
-| 1 | README engineer-facing | 🟡 PARTIAL | ✅ FIXED — product-first tagline, buyer-facing framing |
-| 2 | No hosted demo | 🔴 CRITICAL | 🟡 PARTIAL — deployment configs ready, not yet deployed |
-| 3 | Hardcoded localhost API URL | ✅ FIXED | ✅ Maintained |
-| 4 | No brand identity | ✅ FIXED | ✅ Maintained — "Archon" consistent everywhere |
-| 5 | UI labeled as simulation | ✅ FIXED | ✅ Maintained — professional, live-first copy |
-| 6 | No lead-gen form | ✅ FIXED | ✅ Complete — contact form captures institution, role, AUM, use case |
-| 7 | No competitive positioning | ✅ FIXED | ✅ Why On-Chain page with 6-dimension comparison vs Coinbase Prime |
-| 8 | No pricing model | 🟠 HIGH | 🟠 HIGH — unchanged |
-| 9 | No deployment guide | 🔴 CRITICAL | ✅ FIXED — DEPLOYMENT.md with Vercel+Railway, Railway-only, Render |
-| 10 | No enterprise security page | 🟠 HIGH | 🟠 HIGH — unchanged |
+| 1 | Login page "This is a prototype" | 🟠 HIGH | ✅ FIXED — "Beta access. Credentials are pre-configured for demonstration." |
+| 2 | Homepage, About, Platform, README copy | ✅ Clean | ✅ Clean — "Live on Ethereum Sepolia. Real contracts." throughout |
+| 3 | `Layout.tsx` header: "OTC Fund Prototype" | NEW FINDING | 🔴 CRITICAL — rendered on every page |
+| 4 | `Layout.tsx` footer: "thesis prototype demonstration" | NEW FINDING | 🔴 CRITICAL — contradicts all public messaging |
+| 5 | No hosted demo URL | 🟡 PARTIAL | 🟡 PARTIAL — deployment configs ready, not yet deployed |
+| 6 | No pricing model | 🟠 HIGH | 🟠 Unchanged |
+| 7 | No security/compliance page | 🟠 HIGH | 🟠 Unchanged |
 
-### GTM Assets Summary
-- Professional 5-page marketing site with live Sepolia data
-- Lead-gen contact form (institution, role, AUM bracket, use case)
-- Competitive positioning page vs Traditional OTC and Coinbase Prime
-- Complete deployment guide (3 platforms) with secrets checklist
-- Brand identity consistent across all pages and docs
+### Critical New Finding
+
+#### 🔴 `Layout.tsx` still contains prototype language
+`apps/web/components/Layout.tsx` renders on every page. It contains:
+- Header: **"OTC Fund Prototype"**
+- Footer: **"Built for thesis prototype demonstration. Transactions execute on a local EVM (chainId 31337)."**
+
+This contradicts the Sepolia deployment messaging on every other page and will undermine any enterprise conversation immediately.
 
 ### Remaining GTM Gaps
-
-1. **No live demo URL** — configs exist but not deployed; prospects can't self-serve
-2. **No pricing model** — no licensing tiers, SaaS vs self-hosted not defined
-3. **No security/compliance page** — SOC 2 roadmap, audit status, regulatory positioning all absent
-4. **No pitch deck or one-pager** — sales collateral for enterprise conversations not created
-5. **Etherscan links missing** — homepage claims "real settlement" but doesn't link to deployed contracts
+1. Fix `Layout.tsx` header and footer copy (immediate — blocks all GTM progress)
+2. Deploy hosted demo to a stable public URL
+3. Define pricing model
+4. Add `/security` page — SOC 2 roadmap, audit status, compliance frameworks
+5. Link Etherscan contract addresses on homepage
 
 ### Score Justification
-+10 from: README rewrite (product-first, no "prototype" language), DEPLOYMENT.md guide eliminating the local-setup-only barrier, and deployment configs validated. Plateau at 72 because no live URL exists (still the primary blocker for self-serve inbound), pricing undefined, and no enterprise security posture page.
++3 from the login disclaimer fix. Partially offset by the Layout.tsx discovery — it was present before, but now identified as a higher-priority item. Net +3 because the fix is genuine progress; Layout.tsx was already reflected in the incomplete GTM polish score.
 
 ---
 
 ## Delta Summary
 
-| Domain | May 28 | Jun 09 v1 | Jun 09 v2 | Jun 09 v3 | Total Δ |
-|--------|--------|-----------|-----------|-----------|---------|
-| ⚖️ Legal & Compliance | 22 | 68 | 68 | **72** | +50 |
-| 🔐 Smart Contract Hardening | 52 | 76 | 76 | **74** | +22 |
-| 🏗️ Infrastructure & DevOps | 28 | 52 | 78 | **85** | +57 |
-| 🧩 Product Completeness | 34 | 78 | 78 | **84** | +50 |
-| 📈 Go-to-Market | 28 | 62 | 62 | **72** | +44 |
-| **Overall** | **33** | **67** | **72** | **77** | **+44** |
+| Domain | May 28 | v1 | v2 | v3 | **v4** | Total Δ |
+|--------|--------|----|----|----|--------|---------|
+| ⚖️ Legal & Compliance | 22 | 68 | 68 | 72 | **74** | +52 |
+| 🔐 Smart Contract Hardening | 52 | 76 | 76 | 74 | **74** | +22 |
+| 🏗️ Infrastructure & DevOps | 28 | 52 | 78 | 85 | **88** | +60 |
+| 🧩 Product Completeness | 34 | 78 | 78 | 84 | **81** | +47 |
+| 📈 Go-to-Market | 28 | 62 | 62 | 72 | **75** | +47 |
+| **Overall** | **33** | **67** | **72** | **77** | **78** | **+45** |
 
 ---
 
 ## Top Remaining Blockers
 
-### Before any external sharing of the repo:
-1. 🔴 **Remove .env from git** — `git rm --cached .env && git commit` — live Sepolia key is tracked
+### Fix immediately (newly discovered this cycle):
+1. 🔴 **`Layout.tsx` "OTC Fund Prototype" / "thesis prototype" copy** — visible on every page, contradicts all other messaging
+2. 🔴 **NextAuth social login doesn't set `archon_session` cookie** — social users cannot access protected routes
 
-### Before a production deployment:
-2. 🔴 **Add KYC + sanctions re-check to /otc/settle** — 7-day window compliance gap
-3. 🟠 **Add navCeiling to OTCTrade** — asymmetric price risk blocks institutional use
-4. 🟠 **Add asOf validation to NAVRegistry** — `require(asOf <= block.timestamp)` + monotonicity
-5. 🟠 **requireApiKey must be set** — deployment checklist must enforce this
+### Before production deployment:
+3. 🔴 **KYC + sanctions re-check at `/otc/settle`** — 7-day compliance window
+4. 🟠 **Add `navCeiling` to OTCTrade** — asymmetric price risk
+5. 🟠 **NAVRegistry `asOf` validation** — `require(asOf <= block.timestamp)`
+6. 🟠 **Sanctions provider fail-closed** — fail-open on provider error
 
 ### Before enterprise sales conversations:
-6. 🟠 **Deploy hosted public demo** — deploy.archon.com using the configs that now exist
-7. 🟠 **Define pricing model** — managed SaaS vs self-hosted licensing
-8. 🟡 **Add /security page** — SOC 2 roadmap, audit status, compliance frameworks
-9. 🟡 **Add OTCTrade Pausable** — independent emergency stop
-10. 🟡 **Link Etherscan on homepage** — validate "live settlement" claim visibly
+7. 🟠 **Deploy hosted public demo** — configs exist, deploy them
+8. 🟠 **Define pricing model** — no commercial structure
+9. 🟡 **Add `.dockerignore`** — reduces build context and secret exposure surface
+10. 🟡 **Docker containers run as root** — add `USER node` to runner stages
+11. 🟡 **OTCTrade not independently pausable** — add emergency stop
+12. 🟡 **Link Etherscan on homepage** — validate "real settlement" claim
 
 ### Phased Remediation
 
 | Phase | Focus | Target Score |
 |-------|-------|--------------|
-| **Phase 1** (this week) | Remove .env from git, KYC at settle, NAVRegistry timestamp validation, navCeiling | 82/100 |
-| **Phase 2** (2–3 weeks) | Deploy hosted demo, pricing page, security page, OTCTrade pausable | 88/100 |
-| **Phase 3** (4–8 weeks) | KMS for private key, SOC 2 prep, KYC compliance UI, transaction history, pitch deck | 93/100 |
+| **Phase 1** (this week) | Layout.tsx copy, NextAuth cookie fix, KYC at settle, NAV timestamp validation | 83/100 |
+| **Phase 2** (2–3 weeks) | Deploy hosted demo, navCeiling, pricing page, security page, OTCTrade pausable | 89/100 |
+| **Phase 3** (4–8 weeks) | KMS for private key, SOC 2 prep, KYC compliance UI, transaction history, .dockerignore, non-root containers | 94/100 |
 
 ---
 

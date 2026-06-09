@@ -79,7 +79,9 @@ export default function Login() {
   async function handleSocialLogin(provider: 'google' | 'facebook') {
     setSocialBusy(provider);
     setErr(null);
-    await signIn(provider, { callbackUrl: typeof next === 'string' && next.startsWith('/') ? next : '/investor' });
+    const dest = typeof next === 'string' && next.startsWith('/') ? next : '/investor';
+    // Route through social-bridge so an archon_session cookie is set after OAuth.
+    await signIn(provider, { callbackUrl: `/api/auth/social-bridge?next=${encodeURIComponent(dest)}` });
     setSocialBusy(null);
   }
 

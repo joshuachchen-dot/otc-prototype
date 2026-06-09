@@ -15,9 +15,9 @@ export function Layout({
           <Link href="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-xl bg-zinc-900" />
             <div className="leading-tight">
-              <div className="text-sm font-semibold">OTC Fund Prototype</div>
+              <div className="text-sm font-semibold">Archon</div>
               <div className="text-xs text-zinc-500">
-                Local simulation (Anvil + Foundry)
+                Institutional OTC Settlement
               </div>
             </div>
           </Link>
@@ -41,8 +41,7 @@ export function Layout({
 
       <footer className="border-t bg-white">
         <div className="mx-auto max-w-5xl px-6 py-6 text-xs text-zinc-500">
-          Built for thesis prototype demonstration. Transactions execute on a local
-          EVM (chainId 31337).
+          Archon — Institutional OTC settlement on Ethereum Sepolia.
         </div>
       </footer>
     </div>
