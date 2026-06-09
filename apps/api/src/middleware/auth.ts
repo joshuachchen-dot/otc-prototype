@@ -14,11 +14,16 @@ const VALID_KEYS = buildValidKeys();
 
 /**
  * Fastify preHandler that enforces X-Api-Key header authentication.
- * When no keys are configured, auth is skipped (dev mode).
- * In any deployed environment, set API_KEY or API_KEYS.
+ * Fail-closed in production: rejects all requests if no keys are configured.
+ * In dev (NODE_ENV != production) with no keys configured, auth is skipped.
  */
 export async function requireApiKey(req: FastifyRequest, reply: FastifyReply) {
-  if (VALID_KEYS.size === 0) return;
+  if (VALID_KEYS.size === 0) {
+    if (process.env.NODE_ENV === 'production') {
+      return reply.code(500).send({ error: 'Server misconfiguration: API_KEY is not set.' });
+    }
+    return;
+  }
   const raw      = req.headers['x-api-key'];
   const provided = Array.isArray(raw) ? raw[0] : raw;
   if (!provided || !VALID_KEYS.has(provided)) {

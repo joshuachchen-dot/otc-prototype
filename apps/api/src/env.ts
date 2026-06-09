@@ -3,14 +3,18 @@ import * as dotenv from "dotenv";
 import { z } from "zod";
 import { isAddress, getAddress } from "viem";
 
-/**
- * Explicitly load apps/api/.env
- * This avoids cwd / monorepo / tsx issues entirely.
- */
-dotenv.config({ path: "./.env" });
+// Skip dotenv in Jest (NODE_ENV=test) — jest.setup.ts populates process.env directly
+// so the .env file won't leak API_KEY or other secrets into unit tests.
+if (process.env.NODE_ENV !== 'test') {
+  dotenv.config({ path: "./.env" });
+}
 
 const EnvSchema = z.object({
   RPC_URL: z.string().url(),
+  // Identifies the network RPC_URL points to (Anvil = 31337, Sepolia = 11155111, mainnet = 1, ...).
+  // Must match the RPC's actual chain ID or signed transactions will be rejected.
+  CHAIN_ID: z.coerce.number().int().positive().default(31337),
+  CHAIN_NAME: z.string().default('Anvil'),
   PRIVATE_KEY: z
     .string()
     .regex(/^0x[0-9a-fA-F]{64}$/, "Invalid private key"),
@@ -53,6 +57,27 @@ export const ENV = {
 };
 
 /**
+ * Production safety checks
+ */
+if (process.env.NODE_ENV === 'production') {
+  if (!ENV.DATABASE_URL) {
+    console.error(
+      '\n🔴  FATAL: DATABASE_URL is not set in production.\n' +
+      '   KYC eligibility and AML records require a persistent database.\n' +
+      '   Set DATABASE_URL to a PostgreSQL connection string and restart.\n'
+    );
+    process.exit(1);
+  }
+  if (!ENV.API_KEY && !ENV.API_KEYS) {
+    // requireApiKey already returns 500 for this case — belt-and-suspenders log
+    console.error(
+      '\n🔴  PRODUCTION ERROR: Neither API_KEY nor API_KEYS is set.\n' +
+      '   All authenticated routes will return 500 until this is fixed.\n'
+    );
+  }
+}
+
+/**
  * Debug log (safe)
  */
 console.log("ENV LOADED:", {
@@ -62,4 +87,5 @@ console.log("ENV LOADED:", {
   NAV_REGISTRY_ADDRESS: ENV.NAV_REGISTRY_ADDRESS,
   OTC_TRADE_ADDRESS: ENV.OTC_TRADE_ADDRESS,
   PORT: ENV.PORT,
+  DATABASE_URL: ENV.DATABASE_URL ? '(set)' : '(unset — using in-memory fallback)',
 });

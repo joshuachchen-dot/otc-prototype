@@ -54,6 +54,15 @@ jest.unstable_mockModule('../src/db/aml', () => ({
   amlAlert:         jest.fn(),
 }));
 
+// ── Mock sanctions — all addresses pass by default ────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockSanctionsCheck = jest.fn() as any;
+
+jest.unstable_mockModule('../src/db/sanctions', () => ({
+  sanctionsCheck: mockSanctionsCheck,
+  SanctionsHit:   class SanctionsHit extends Error { name = 'SanctionsHit'; },
+}));
+
 const VALID_ADDR = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 const TX_HASH = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
@@ -77,6 +86,8 @@ beforeEach(() => {
   mockAmlCheckSize.mockReset();
   mockAmlCheckVelocity.mockReset();
   mockAmlRecord.mockReset();
+  mockSanctionsCheck.mockReset();
+  mockSanctionsCheck.mockResolvedValue(undefined);
 });
 
 // ── POST /token/subscribe ────────────────────────────────────────────────────

@@ -1,236 +1,188 @@
-OTC Fund Prototype
+Archon — Institutional OTC Settlement Platform
 
-Blockchain-based OTC Fund Simulation (Local Anvil + Solidity + API + Web UI)
+Compliant tokenized fund infrastructure for asset managers, prime brokers, and auditors.
+Live on Ethereum Sepolia. Real contracts. Real settlement. Real audit trail.
 
-This repository contains a full-stack prototype of a blockchain-based OTC fund platform.
-It simulates fund subscription, redemption, NAV posting, and audit export using:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Solidity smart contracts (FundToken + NAVRegistry)
+WHAT IS ARCHON
 
-Local Ethereum network (Anvil, Foundry toolchain)
+Archon is a bilateral OTC settlement layer for tokenized fund shares. It combines:
 
-Node.js API middleware
+  - EIP-712 cryptographic seller consent — trades cannot be proposed without
+    a signed authorization from the seller, verified on-chain via ecrecover.
 
-Next.js web UI with role-based portals
+  - Atomic settlement — tokens burn from seller and mint to buyer in a single
+    transaction. No partial settlement. No intermediate custody.
 
-All transactions are simulated locally and do not involve real assets.
+  - Programmable compliance — KYC eligibility, AML velocity limits, and NAV
+    floors enforced by smart contracts and API middleware before any transaction
+    reaches the chain.
 
-1. System Architecture (High-Level)
-┌────────────┐        ┌──────────────┐        ┌────────────┐
-│  Web UI    │ ─────▶ │  API Server  │ ─────▶ │  Contracts │
-│ (Next.js)  │        │ (Node/TS)    │        │ (Solidity) │
-└────────────┘        └──────────────┘        └────────────┘
-                                                    │
-                                                    ▼
-                                                ┌────────┐
-                                                │ Anvil  │
-                                                │  EVM   │
-                                                └────────┘
+  - Permissionless auditability — every NAV post, trade, mint, and burn is
+    permanently recorded on Ethereum. Any auditor with an RPC endpoint can
+    independently verify the full fund history.
 
-2. Prerequisites
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Ensure the following are installed:
+DEPLOYED CONTRACTS (Ethereum Sepolia)
 
-Node.js ≥ 18
+  FundToken (ERC-20)   — Whitelist-gated fund shares with subscription and
+                          redemption roles. Transfer hook enforces KYC on all
+                          token movements.
 
-pnpm (npm install -g pnpm)
+  NAVRegistry          — On-chain NAV oracle. Authenticated posts with
+                          timestamps, queryable by OTCTrade at settlement.
 
-Foundry (Forge, Anvil)
+  OTCTrade             — Bilateral settlement engine. Requires SETTLEMENT_AGENT_ROLE
+                          to propose, EIP-712 seller signature to authorize,
+                          and passes 5 on-chain checks before settlement:
+                          seller balance, NAV floor, NAV freshness (24h),
+                          trade expiry (7 days), and signature validity.
 
-Install Foundry:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
+QUICKSTART (Docker — recommended)
 
+  Prerequisites: Docker + Docker Compose
 
-Verify:
+  1. Copy and fill environment files:
 
-forge --version
-anvil --version
+       cp apps/api/.env.example apps/api/.env
+       cp apps/web/.env.example apps/web/.env.local
 
-3. Repository Structure
-otc-prototype/
-├── apps/
-│   ├── api/          # Backend API (Node.js + TypeScript)
-│   └── web/          # Frontend UI (Next.js)
-├── contracts/        # Solidity smart contracts (Foundry)
-├── README.md
+  2. Start all services:
 
-4. Step-by-Step: Running the Full System
+       docker compose up --build
 
-You will need four terminals.
+  3. Open the platform:
 
-Terminal 1 — Start Local Blockchain (Anvil)
-anvil
+       http://localhost:3000
 
+  Demo login credentials (hardcoded for beta):
 
-Expected output:
+    Role           Username    Password
+    ─────────────  ──────────  ────────────
+    Investor       investor    investor123
+    Fund Manager   manager     manager123
+    Auditor        auditor     auditor123
 
-Chain ID: 31337
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-RPC: http://127.0.0.1:8545
+QUICKSTART (Local dev — Anvil)
 
-10 pre-funded test accounts
+  Prerequisites: Node.js ≥ 20, pnpm, Foundry (forge + anvil)
 
-⚠️ Leave this running
+  Install Foundry:
+    curl -L https://foundry.paradigm.xyz | bash && foundryup
 
-Terminal 2 — Deploy Smart Contracts
-cd contracts
-forge build
-forge test -vv
+  Run everything in one command:
+    ./start.sh
 
+  This starts Anvil, deploys contracts, seeds test accounts, starts the API
+  and web UI. All contract addresses and API keys are auto-generated.
 
-Deploy contracts:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-forge script script/Deploy.s.sol:Deploy \
-  --rpc-url http://127.0.0.1:8545 \
-  --broadcast \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+SYSTEM ARCHITECTURE
 
+  ┌─────────────────────┐     ┌──────────────────────┐     ┌──────────────┐
+  │   Web UI (Next.js)  │────▶│   API (Fastify/TS)   │────▶│  Contracts   │
+  │   localhost:3000    │     │   localhost:3001      │     │  (Solidity)  │
+  └─────────────────────┘     └──────────────────────┘     └──────────────┘
+           │                            │                         │
+           │  JWT sessions              │  X-Api-Key auth         │  Ethereum
+           │  Role-gated pages          │  KYC/AML/Sanctions      │  Sepolia /
+           │  EIP-712 signing           │  NAV scheduler          │  Anvil (dev)
+           └────────────────────────────┴─────────────────────────┘
 
-Expected output:
+  apps/
+    api/      Node.js + TypeScript API — chain interaction, KYC, AML, audit
+    web/      Next.js frontend — public site, login portal, role-based dashboards
+  contracts/  Solidity (Foundry) — FundToken, NAVRegistry, OTCTrade
 
-FundToken:    0x...
-NAVRegistry:  0x...
-ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+PORTALS
 
-These addresses are required by the API.
+  Public (no login required)
+    /             Live dashboard — NAV, AUM, OTC feed from Sepolia
+    /about        Platform origin and values
+    /why-onchain  On-chain vs traditional OTC vs Coinbase Prime
+    /platform     Five-step settlement walkthrough
+    /contact      Request access form
 
-Terminal 3 — Start Backend API
-cd apps/api
-pnpm install
-pnpm dev
+  Authenticated
+    /investor     Token balance, subscribe, redeem          [investor, manager]
+    /manager      Post NAV, monitor fund                    [manager]
+    /auditor      Download on-chain audit CSV               [auditor, manager]
+    /market       Live ETH/BTC market data                  [all roles]
+    /otc          Run live OTC settlement scenarios          [manager]
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-API runs on:
+KEY API ENDPOINTS
 
-http://localhost:3001
+  GET  /health                   Liveness check
+  GET  /nav/latest               Latest on-chain NAV
+  GET  /token/supply             Total OTCF token supply
+  GET  /token/balance/:address   Token balance for an address
+  GET  /otc/trades               All trades (Pending / Settled / Cancelled)
+  GET  /risk                     Current fund risk status
+  GET  /market/prices            Live ETH/BTC prices
 
-Health Check
-curl http://localhost:3001/health
+  POST /token/subscribe          Mint (KYC + AML checked)        [API key]
+  POST /token/redeem             Burn (KYC + AML checked)        [API key]
+  POST /nav/post                 Post NAV on-chain               [API key]
+  POST /otc/sign-propose         Generate EIP-712 seller consent [API key]
+  POST /otc/propose              Submit trade proposal           [API key]
+  POST /otc/settle               Settle a pending trade          [API key]
+  POST /otc/cancel               Cancel a pending trade          [API key]
+  POST /kyc/mark-eligible        Mark address KYC-eligible       [API key]
+  GET  /audit/export             Download audit CSV              [API key]
 
-Terminal 4 — Start Web UI
-cd apps/web
-pnpm install
-pnpm dev
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+ENVIRONMENT VARIABLES
 
-Open browser:
+  See apps/api/.env.example and apps/web/.env.example for full documentation.
 
-http://localhost:3000
+  Required for production (API):
+    RPC_URL, PRIVATE_KEY, FUND_TOKEN_ADDRESS, NAV_REGISTRY_ADDRESS,
+    OTC_TRADE_ADDRESS, API_KEY, CORS_ORIGIN
 
-5. Available Web Portals
-Home
+  Strongly recommended for production:
+    DATABASE_URL    (PostgreSQL — KYC/AML data persisted across restarts)
 
-Entry point
+  Optional:
+    SANCTIONS_API_URL, SANCTIONS_API_KEY, AML_MAX_TX, AML_VELOCITY_24H
 
-Navigation to all roles
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Investor Portal
+RESETTING LOCAL STATE
 
-View token balance
+  Stop all processes (Ctrl+C in the start.sh terminal), then re-run:
 
-Subscribe (mint fund tokens)
+    ./start.sh
 
-Redeem (burn fund tokens)
+  Note: transactions on Sepolia testnet are permanent and cannot be reverted.
+  Resetting only affects the local Anvil dev environment.
 
-View risk status
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Manager Console
+TROUBLESHOOTING
 
-Post NAV on-chain
+  forge/anvil not found
+    export PATH="$HOME/.foundry/bin:$PATH"
 
-View latest NAV
+  API won't start — address parse failed
+    Check that forge script output contains FundToken/NAVRegistry/OTCTrade
+    lines. Re-run ./start.sh.
 
-Simulates fund administrator actions
+  Web shows stale data
+    The NAV scheduler posts every 60s. Wait one cycle or POST /nav/post manually
+    via the Manager portal.
 
-Auditor View
-
-Export CSV of:
-
-NAV postings
-
-Subscriptions
-
-Redemptions
-
-Demonstrates immutable audit trail
-
-6. API Endpoints (Key)
-Health
-GET /health
-
-Risk Status
-GET /risk
-
-Token Balance
-GET /token/balance/:address
-
-Subscribe (Mint)
-POST /token/subscribe
-{
-  "amount": "1000000000000000000"
-}
-
-Redeem (Burn)
-POST /token/redeem
-{
-  "amount": "1000000000000000000"
-}
-
-Post NAV (Manager)
-POST /nav/post
-{
-  "nav": "123456789",
-  "asOf": 1710000000
-}
-
-Latest NAV
-GET /nav/latest
-
-Audit Export
-GET /audit/export
-
-
-Returns CSV.
-
-7. Simulation Notes (Important)
-
-All ETH is test ETH
-
-All transactions are local-only
-
-No real KYC, money, or external oracle is used
-
-NAV values are manually supplied
-
-The system demonstrates architecture and control flow, not production deployment
-
-8. Common Troubleshooting
-forge: command not found
-export PATH="$HOME/.foundry/bin:$PATH"
-
-API fails with BigInt error
-
-The API serializes on-chain numeric fields as strings to avoid "Do not know how to serialize a BigInt".
-
-Web UI does not update
-
-Ensure API is running
-
-Refresh page
-
-Check browser console
-
-9. Resetting the System
-
-To reset all state:
-
-Stop Anvil
-
-Restart Anvil
-
-Redeploy contracts
-
-Restart API + Web
+  Docker build fails
+    Ensure Docker Desktop is running and you have sufficient disk space (build
+    requires ~2 GB).

@@ -1,19 +1,29 @@
 // apps/api/src/chain.ts
-import { createWalletClient, createPublicClient, getContract, http, parseAbi } from 'viem';
+import { createWalletClient, createPublicClient, defineChain, getContract, http, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
 import { ENV } from './env';
+
+// Defined inline (rather than imported from 'viem/chains') so we don't load
+// viem's full 1000+-chain barrel file at startup, and so chain.id always
+// matches whichever network RPC_URL actually points to (Anvil vs Sepolia vs ...).
+export const chain = defineChain({
+  id: ENV.CHAIN_ID,
+  name: ENV.CHAIN_NAME,
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: [ENV.RPC_URL] } },
+  testnet: ENV.CHAIN_ID !== 1,
+});
 
 export const account = privateKeyToAccount(ENV.PRIVATE_KEY as `0x${string}`);
 
 export const rpc = createPublicClient({
-  chain: foundry,
+  chain,
   transport: http(ENV.RPC_URL),
 });
 
 export const wallet = createWalletClient({
   account,
-  chain: foundry,
+  chain,
   transport: http(ENV.RPC_URL),
 });
 
@@ -37,6 +47,7 @@ export const token = getContract({
     'function mint(address to, uint256 amount) external',
     'function burnFrom(address from, uint256 amount) external',
     'function balanceOf(address a) view returns (uint256)',
+    'function totalSupply() view returns (uint256)',
     'function setWhitelisted(address a, bool ok) external',
     'event Transfer(address indexed from, address indexed to, uint256 value)',
   ]),

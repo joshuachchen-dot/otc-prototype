@@ -2,5 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
-body { @apply bg-gray-50 text-gray-900; }
+:root {
+  --color-bg-page:        #f0f0f5;
+  --color-bg-site:        #ffffff;
+  --color-bg-content:     #f5f5f7;
+  --color-bg-dark:        #0d1117;
+  --color-bg-dark-card:   #1d1d1f;
+  --color-text-primary:   #1d1d1f;
+  --color-text-secondary: #86868b;
+  --color-green:          #34c759;
+  --color-teal:           #00c9a7;
+  --color-indigo:         #6366f1;
+  --color-indigo-light:   #a5b4fc;
+  --color-amber:          #ff9f0a;
+  --color-border-light:   #e5e5ea;
+  --color-border-subtle:  #f0f0f0;
+
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Transform-only keyframes — autoprefixer-safe */
+@keyframes driftA {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(60px, 40px) scale(1.1); }
+}
+@keyframes driftB {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-40px, 60px) scale(1.08); }
+}
+@keyframes livePulse {
+  0%   { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(2.4); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes growBar {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+@keyframes breathe {
+  from { opacity: 0.7; }
+  to   { opacity: 1.0; }
+}
+@keyframes spinSlow {
+  to { transform: rotate(360deg); }
+}
+@keyframes pendingPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
