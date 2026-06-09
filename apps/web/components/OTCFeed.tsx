@@ -7,7 +7,7 @@ export interface OTCTrade {
   buyer: string;
   amount: string;
   nav: string;
-  status: "settled" | "pending";
+  status: "settled" | "pending" | "cancelled";
 }
 
 interface OTCFeedProps {
@@ -55,7 +55,7 @@ export default function OTCFeed({ trades }: OTCFeedProps) {
             style={{
               width: 9,
               height: 9,
-              background: t.status === 'settled' ? '#34c759' : '#ff9f0a',
+              background: t.status === 'settled' ? '#34c759' : t.status === 'cancelled' ? '#6b7280' : '#ff9f0a',
               animation: t.status === 'pending' ? 'pendingPulse 2s ease-in-out infinite' : undefined,
             }}
           />
@@ -65,9 +65,9 @@ export default function OTCFeed({ trades }: OTCFeedProps) {
             </p>
             <p
               className="text-[10px] font-semibold mt-1"
-              style={{ color: t.status === 'settled' ? '#34c759' : '#ff9f0a' }}
+              style={{ color: t.status === 'settled' ? '#34c759' : t.status === 'cancelled' ? '#6b7280' : '#ff9f0a' }}
             >
-              {t.status === 'settled' ? 'Settled' : 'Pending Settlement'}
+              {t.status === 'settled' ? 'Settled' : t.status === 'cancelled' ? 'Cancelled' : 'Pending Settlement'}
             </p>
           </div>
           <div className="text-right">

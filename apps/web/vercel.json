@@ -1,0 +1,15 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "pnpm --filter @ots/web run build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@archon_api_url",
+    "NEXT_PUBLIC_API_KEY": "@archon_api_key"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "@archon_api_url",
+      "NEXT_PUBLIC_API_KEY": "@archon_api_key"
+    }
+  }
+}

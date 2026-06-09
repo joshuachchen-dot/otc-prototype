@@ -75,4 +75,13 @@ export default async function (app: FastifyInstance) {
       reply.code(500).send({ error: err.message ?? 'Balance lookup failed' });
     }
   });
+
+  app.get('/token/supply', async (_req, reply) => {
+    try {
+      const supply = await token.read.totalSupply();
+      return { supply: supply.toString() };
+    } catch (err: any) {
+      reply.code(500).send({ error: err.message ?? 'Supply lookup failed' });
+    }
+  });
 }

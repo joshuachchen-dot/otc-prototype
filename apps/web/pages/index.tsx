@@ -1,67 +1,110 @@
+import { useEffect, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import LiveDot from "@/components/LiveDot";
-import Sparkline from "@/components/Sparkline";
 import NavChart from "@/components/NavChart";
 import InvestorHeroCard from "@/components/InvestorHeroCard";
 import ManagerCard from "@/components/ManagerCard";
 import AuditorCard from "@/components/AuditorCard";
 import OTCFeed, { OTCTrade } from "@/components/OTCFeed";
+import { apiFetch } from "@/lib/api";
 
-const METRICS = [
-  {
-    label: "NAV / Unit",
-    value: "$3,024.18",
-    delta: "↑ 2.1% today",
-    up: true,
-    sparkPoints: "0,30 10,23 22,25 34,16 46,10 64,4",
-    delay: "0s",
-  },
-  {
-    label: "Total AUM",
-    value: "$48.2M",
-    delta: "↑ $1.4M this week",
-    up: true,
-    sparkPoints: "0,26 12,21 24,18 36,14 48,16 64,6",
-    delay: "0.15s",
-  },
-  {
-    label: "Active OTC Trades",
-    value: "12",
-    delta: "3 pending settlement",
-    up: false,
-    sparkPoints: "0,22 12,19 24,24 36,15 48,12 64,9",
-    delay: "0.3s",
-  },
-];
+type LiveNav   = { nav: string; asOf: string; storedAt: string };
+type LiveTrade = { id: number; seller: string; buyer: string; amount: string; navFloor: string; status: string };
 
-const MOCK_TRADES: OTCTrade[] = [
-  {
-    id: "1",
-    seller: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    buyer:  "0x3C44CddB6a900fa2b585dd299e03d12FA4293BC",
-    amount: "50,000 OTCF",
-    nav:    "$3,021.40",
-    status: "settled",
-  },
-  {
-    id: "2",
-    seller: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-    buyer:  "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
-    amount: "12,500 OTCF",
-    nav:    "$3,024.18",
-    status: "pending",
-  },
-  {
-    id: "3",
-    seller: "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
-    buyer:  "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
-    amount: "80,000 OTCF",
-    nav:    "$3,018.75",
-    status: "settled",
-  },
-];
+// NAV is stored on-chain scaled by 1e6 (e.g. "1667980000" = $1,667.98)
+function formatUsdFromMicro(raw: string): string {
+  return `$${(Number(raw) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// AUM = total supply (18 decimals) × NAV (scaled by 1e6) → dollars, kept in BigInt to avoid precision loss
+function formatAum(supply: string, navMicro: string): string {
+  const dollars = Number((BigInt(supply) * BigInt(navMicro)) / 10n ** 18n) / 1e6;
+  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (dollars >= 1_000)     return `$${(dollars / 1_000).toFixed(1)}K`;
+  return `$${dollars.toFixed(2)}`;
+}
+
+function formatOTCF(raw: string): string {
+  return `${(BigInt(raw) / 10n ** 18n).toLocaleString("en-US")} OTCF`;
+}
+
+function formatRelativeTime(unixSeconds: string): string {
+  const diffMs = Date.now() - Number(unixSeconds) * 1000;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1)  return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export default function Home() {
+  const [nav,    setNav]    = useState<LiveNav | null>(null);
+  const [supply, setSupply] = useState<string | null>(null);
+  const [trades, setTrades] = useState<LiveTrade[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [navRes, supplyRes, tradesRes] = await Promise.all([
+          apiFetch("/nav/latest"),
+          apiFetch("/token/supply"),
+          apiFetch("/otc/trades"),
+        ]);
+        const [navData, supplyData, tradesData] = await Promise.all([
+          navRes.json(), supplyRes.json(), tradesRes.json(),
+        ]);
+        if (cancelled) return;
+        setNav(navData);
+        setSupply(supplyData.supply);
+        setTrades(tradesData);
+      } catch {
+        // Live API unreachable — sections fall back to their loading placeholders below.
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const pendingCount = trades.filter((t) => t.status === "Pending").length;
+  const settledCount = trades.filter((t) => t.status === "Settled").length;
+
+  const metrics = [
+    {
+      label: "NAV / Unit",
+      value: nav ? formatUsdFromMicro(nav.nav) : "—",
+      delta: nav ? `Posted on-chain ${formatRelativeTime(nav.asOf)}` : "Awaiting on-chain data",
+    },
+    {
+      label: "Total AUM",
+      value: nav && supply ? formatAum(supply, nav.nav) : "—",
+      delta: supply ? `${formatOTCF(supply)} in circulation` : "Awaiting on-chain data",
+    },
+    {
+      label: "Total OTC Trades",
+      value: loaded ? String(trades.length) : "—",
+      delta: loaded ? `${settledCount} settled · ${trades.length - settledCount - pendingCount} cancelled` : "Awaiting on-chain data",
+    },
+  ];
+
+  const feedTrades: OTCTrade[] = trades
+    .filter((t) => t.status === "Settled" || t.status === "Cancelled")
+    .slice()
+    .reverse()
+    .slice(0, 5)
+    .map((t) => ({
+      id: String(t.id),
+      seller: t.seller,
+      buyer: t.buyer,
+      amount: formatOTCF(t.amount),
+      nav: formatUsdFromMicro(t.navFloor),
+      status: t.status === "Settled" ? "settled" : "cancelled",
+    }));
+
   return (
     <>
       <Head>
@@ -107,24 +150,26 @@ export default function Home() {
         </p>
 
         <div className="relative z-10 flex gap-4 justify-center animate-fade-up" style={{ animationDelay: "0.2s" }}>
-          <button
-            className="font-semibold text-white transition-transform hover:-translate-y-0.5"
-            style={{ fontSize: 16, padding: "15px 30px", borderRadius: 980, background: "#1d1d1f", border: "none", cursor: "pointer" }}
+          <Link
+            href="/contact"
+            className="no-underline font-semibold text-white transition-transform hover:-translate-y-0.5"
+            style={{ fontSize: 16, padding: "15px 30px", borderRadius: 980, background: "#1d1d1f" }}
           >
             Request Access
-          </button>
-          <button
-            className="font-semibold text-[#1d1d1f]"
-            style={{ fontSize: 16, padding: "15px 30px", borderRadius: 980, background: "transparent", border: "1.5px solid #ccc", cursor: "pointer" }}
+          </Link>
+          <Link
+            href="/platform"
+            className="no-underline font-semibold text-[#1d1d1f]"
+            style={{ fontSize: 16, padding: "15px 30px", borderRadius: 980, background: "transparent", border: "1.5px solid #ccc" }}
           >
-            Watch Demo
-          </button>
+            How It Works
+          </Link>
         </div>
       </section>
 
       {/* ── Metrics Bar ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1, background: "#f0f0f0", borderTop: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0" }}>
-        {METRICS.map((m, i) => (
+        {metrics.map((m, i) => (
           <div key={m.label} className="relative bg-white" style={{ padding: "28px 32px" }}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.8px]" style={{ color: "#86868b" }}>{m.label}</p>
             <p
@@ -133,10 +178,7 @@ export default function Home() {
             >
               {m.value}
             </p>
-            <p className="text-[13px] mt-1.5" style={{ color: m.up ? "#34c759" : "#86868b" }}>{m.delta}</p>
-            <div className="absolute right-6 top-1/2 -translate-y-1/2">
-              <Sparkline points={m.sparkPoints} color={m.up ? "#34c759" : "#86868b"} delay={m.delay} />
-            </div>
+            <p className="text-[13px] mt-1.5" style={{ color: "#86868b" }}>{m.delta}</p>
           </div>
         ))}
         <div className="relative bg-white" style={{ padding: "28px 32px" }}>
@@ -152,14 +194,17 @@ export default function Home() {
       {/* ── Content ── */}
       <div style={{ background: "#f5f5f7", padding: "64px 48px 72px" }}>
         <p className="text-[11px] font-bold uppercase tracking-[1.4px] mb-6" style={{ color: "#c0c0c8" }}>Performance</p>
-        <NavChart />
+        <NavChart
+          value={nav ? formatUsdFromMicro(nav.nav) : "—"}
+          subtitle={nav ? `Posted on-chain ${formatRelativeTime(nav.asOf)}` : "Awaiting first on-chain post"}
+        />
 
         <p className="text-[11px] font-bold uppercase tracking-[1.4px] mb-6" style={{ color: "#c0c0c8" }}>Portals</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 22 }}>
           <InvestorHeroCard />
-          <ManagerCard activeTradeCount={12} />
+          <ManagerCard activeTradeCount={trades.length} />
           <AuditorCard />
-          <OTCFeed trades={MOCK_TRADES} />
+          <OTCFeed trades={feedTrades} />
         </div>
       </div>
     </>

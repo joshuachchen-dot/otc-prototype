@@ -1,6 +1,11 @@
 // Populate env vars required by env.ts before any module is loaded in tests.
 // Values use Anvil's well-known default accounts/addresses — safe for unit tests.
-process.env.RPC_URL = 'http://localhost:8545';
+//
+// IMPORTANT: RPC_URL intentionally points to a closed port. Tests that need
+// chain calls must mock '../src/chain' so the real viem client is never used.
+// Using localhost:8545 here causes tests to pass accidentally when a local
+// Anvil node happens to be running, masking missing mocks.
+process.env.RPC_URL = 'http://localhost:19999';
 process.env.PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 process.env.FUND_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';

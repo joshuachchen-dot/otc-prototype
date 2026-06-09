@@ -6,7 +6,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ANVIL_URL="http://127.0.0.1:8545"
+ANVIL_URL="http://0.0.0.0:8545"
 DEPLOYER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 # Dev-only API key — randomly generated each run; never a committed static secret
@@ -29,7 +29,7 @@ trap cleanup INT TERM EXIT
 
 # ── 1. Anvil ──────────────────────────────────────────────────────────────────
 echo "▶  Starting Anvil on port 8545..."
-anvil --host 127.0.0.1 --port 8545 --silent &
+anvil --host 0.0.0.0 --port 8545 --silent &
 PIDS+=($!)
 
 # Wait until Anvil accepts JSON-RPC calls
@@ -67,7 +67,7 @@ echo "   OTCTrade:    $OTC_TRADE_ADDRESS"
 
 # Write addresses and dev API key to API .env
 cat > "$ROOT/apps/api/.env" <<EOF
-RPC_URL=http://127.0.0.1:8545
+RPC_URL=http://localhost:8545
 PRIVATE_KEY=$PRIVATE_KEY
 FUND_TOKEN_ADDRESS=$FUND_TOKEN_ADDRESS
 NAV_REGISTRY_ADDRESS=$NAV_REGISTRY_ADDRESS
@@ -106,21 +106,28 @@ echo "▶  Starting API on port 3001..."
 (cd "$ROOT" && pnpm --filter @ots/api dev) &
 PIDS+=($!)
 
-# Wait for API to be ready (up to 30 s)
+# Wait for API to be ready (up to 30 s) — exit hard if it never starts
 echo -n "   Waiting for API"
+API_READY=0
 for i in $(seq 1 60); do
-  if curl -sf http://127.0.0.1:3001/health > /dev/null 2>&1; then
+  if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
     echo " ready"
+    API_READY=1
     break
   fi
   echo -n "."
   sleep 0.5
 done
+if [ "$API_READY" -eq 0 ]; then
+  echo ""
+  echo "ERROR: API did not become ready within 30s. Check logs above."
+  exit 1
+fi
 
 # ── 4b. KYC-approve test accounts ────────────────────────────────────────────
 echo "▶  Marking OTC test accounts as KYC-eligible..."
 kyc_approve() {
-  curl -sf -X POST http://127.0.0.1:3001/kyc/mark-eligible \
+  curl -sf -X POST http://localhost:3001/kyc/mark-eligible \
     -H "content-type: application/json" \
     -H "x-api-key: $DEV_API_KEY" \
     -d "{\"address\":\"$1\"}" > /dev/null 2>&1
@@ -136,8 +143,8 @@ PIDS+=($!)
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Anvil   →  http://127.0.0.1:8545"
-echo "  API     →  http://127.0.0.1:3001"
+echo "  Anvil   →  http://localhost:8545"
+echo "  API     →  http://localhost:3001"
 echo "  Web UI  →  http://localhost:3000"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  OTC test accounts:"

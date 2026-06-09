@@ -1,4 +1,4 @@
-import { jest, describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 
@@ -39,6 +39,11 @@ beforeAll(async () => {
 });
 
 afterAll(() => app.close());
+
+beforeEach(() => {
+  mockLatestNAV.mockReset();
+  mockPostNAV.mockReset();
+});
 
 // ── GET /nav/latest ──────────────────────────────────────────────────────────
 

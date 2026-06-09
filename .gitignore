@@ -1,6 +1,15 @@
 # env / secrets
 .env
 **/.env
+**/.env.local
+**/.env.*.local
+
+# IDE / tool internals
+.claude/
+.superpowers/
+
+# TypeScript build info
+**/*.tsbuildinfo
 
 # node
 node_modules/

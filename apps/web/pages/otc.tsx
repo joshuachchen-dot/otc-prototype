@@ -5,10 +5,13 @@ const SELLER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const BUYER  = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
 
 const TRADE_AMOUNT = (500n * 10n ** 18n).toString();
-const NAV_FLOOR    = "2000000000";
 
+// navFloor is per-scenario so each can demonstrate a different live-data outcome.
+// Scenarios 1 & 2 use $1,000 — live ETH/USD (~$1,662) comfortably clears it.
+// Scenario 3 uses $2,000 — live ETH/USD is below it, showing NAV_BELOW_FLOOR.
 type ScenarioDef = {
   id: 1 | 2 | 3;
+  navFloor: string;
   title: string;
   description: string;
   sellCondition: string;
@@ -20,36 +23,38 @@ type ScenarioDef = {
 const SCENARIOS: ScenarioDef[] = [
   {
     id: 1,
+    navFloor: "1000000000",
     title: "Scenario 1 — Successful Settlement",
     description:
       "Seller holds 1,000 OTCF (well above the 500 trade amount). " +
-      "NAV is posted at $3,000, above the $2,000 floor required by the trade terms. " +
+      "Live on-chain NAV (~$1,662) exceeds the $1,000 floor in the trade terms. " +
       "Both conditions are satisfied — trade settles.",
     sellCondition: "Seller balance = 1,000 OTCF ≥ 500 OTCF required",
-    buyCondition:  "NAV = $3,000 ≥ $2,000 floor",
+    buyCondition:  "Live NAV (~$1,662) ≥ $1,000 floor",
     expectedOutcome: "success",
     outcomeLabel: "Trade settles — tokens transferred from seller to buyer",
   },
   {
     id: 2,
+    navFloor: "1000000000",
     title: "Scenario 2 — Sell-Side Fail (insufficient inventory)",
     description:
       "Seller holds only 100 OTCF, below the 500 required. " +
-      "NAV is fine at $3,000. The contract rejects settlement because the " +
-      "sell-side term is not met — SELLER_INSUFFICIENT_BALANCE.",
+      "NAV is fine above the $1,000 floor. The contract rejects settlement — SELLER_INSUFFICIENT_BALANCE.",
     sellCondition: "Seller balance = 100 OTCF < 500 OTCF required ✗",
-    buyCondition:  "NAV = $3,000 ≥ $2,000 floor ✓",
+    buyCondition:  "Live NAV (~$1,662) ≥ $1,000 floor ✓",
     expectedOutcome: "sell-fail",
     outcomeLabel: "Terminated — SELLER_INSUFFICIENT_BALANCE",
   },
   {
     id: 3,
+    navFloor: "2000000000",
     title: "Scenario 3 — Buy-Side Fail (NAV below floor)",
     description:
-      "Seller holds 1,000 OTCF (sufficient). NAV is only $1,500, below the " +
-      "$2,000 floor in the buy-side contract terms. The contract rejects — NAV_BELOW_FLOOR.",
+      "Seller holds 1,000 OTCF (sufficient). Live on-chain NAV (~$1,662) is below the " +
+      "$2,000 floor baked into the trade terms. The contract rejects — NAV_BELOW_FLOOR.",
     sellCondition: "Seller balance = 1,000 OTCF ≥ 500 OTCF required ✓",
-    buyCondition:  "NAV = $1,500 < $2,000 floor ✗",
+    buyCondition:  "Live NAV (~$1,662) < $2,000 floor ✗",
     expectedOutcome: "buy-fail",
     outcomeLabel: "Terminated — NAV_BELOW_FLOOR",
   },
@@ -130,7 +135,12 @@ export default function OTCPage() {
       if (!setupRes.ok) throw new Error(setupData.error ?? "Setup failed");
       for (const step of setupData.steps as string[]) addLog(s.id, { label: "Setup", value: step, ok: true });
 
-      const proposeRes  = await apiFetch("/otc/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: NAV_FLOOR }) });
+      const signRes  = await apiFetch("/otc/sign-propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: s.navFloor }) });
+      const signData = await signRes.json();
+      if (!signRes.ok) throw new Error(signData.error ?? "Seller consent signing failed");
+      addLog(s.id, { label: "Seller signed consent (EIP-712)", value: `nonce=${signData.nonce}`, ok: true });
+
+      const proposeRes  = await apiFetch("/otc/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: s.navFloor, ...signData }) });
       const proposeData = await proposeRes.json();
       if (!proposeRes.ok) throw new Error(proposeData.error ?? "Propose failed");
       const tradeId: number = proposeData.id;
@@ -184,7 +194,7 @@ export default function OTCPage() {
           <div><b>Seller</b> — Account #1: {SELLER.slice(0, 10)}…</div>
           <div><b>Buyer</b> — Account #2: {BUYER.slice(0, 10)}…</div>
           <div><b>Trade amount:</b> 500 OTCF</div>
-          <div><b>NAV floor (buy-side term):</b> $2,000</div>
+          <div><b>NAV floor:</b> per-scenario (see buy-side condition)</div>
         </div>
 
         {/* Scenarios */}
