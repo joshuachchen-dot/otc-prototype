@@ -22,6 +22,10 @@ contract NAVRegistryTest is Test {
     /* ─────────────────────────────── setup ─────────────────────────────── */
 
     function setUp() public {
+        // Foundry's default block.timestamp (1) is earlier than every hardcoded
+        // asOf fixture below; warp forward so postNAV's ASOF_FUTURE check passes.
+        vm.warp(2_000_000_000);
+
         vm.prank(admin);
         nav = new NAVRegistry(admin);
 
@@ -187,16 +191,33 @@ contract NAVRegistryTest is Test {
         assertLt(gasUsed, 30_000, "latestNAV view gas exceeds expected ceiling");
     }
 
-    /// Fuzz: any positive nav and asOf can be posted and read back accurately.
+    /// Fuzz: any positive nav and asOf (not in the future) can be posted and read back accurately.
     function testFuzz_PostAndReadBack(uint128 navVal, uint48 asOfVal) public {
         vm.assume(navVal > 0);
-        vm.assume(asOfVal > 0);
+        uint256 boundedAsOf = bound(uint256(asOfVal), 1, block.timestamp);
 
         vm.prank(admin);
-        nav.postNAV(navVal, asOfVal);
+        nav.postNAV(navVal, boundedAsOf);
 
         NAVRegistry.NavRecord memory rec = nav.latestNAV();
         assertEq(rec.nav,  navVal);
-        assertEq(rec.asOf, asOfVal);
+        assertEq(rec.asOf, boundedAsOf);
+    }
+
+    /* ═══════════════════════ ASOF VALIDATION ═══════════════════════════ */
+
+    /// postNAV reverts when asOf is later than the current block timestamp.
+    function testPost_RevertsWhenAsOfInFuture() public {
+        vm.prank(admin);
+        vm.expectRevert("ASOF_FUTURE");
+        nav.postNAV(SAMPLE_NAV, block.timestamp + 1);
+    }
+
+    /// postNAV accepts asOf == block.timestamp (boundary, not "future").
+    function testPost_AllowsAsOfEqualToBlockTimestamp() public {
+        vm.prank(admin);
+        nav.postNAV(SAMPLE_NAV, block.timestamp);
+
+        assertEq(nav.latestNAV().asOf, block.timestamp);
     }
 }

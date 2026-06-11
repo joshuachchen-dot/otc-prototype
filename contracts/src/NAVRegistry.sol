@@ -17,6 +17,7 @@ contract NAVRegistry is AccessControl {
     }
 
     function postNAV(uint256 nav, uint256 asOf) external onlyRole(MANAGER_ROLE) {
+        require(asOf <= block.timestamp, "ASOF_FUTURE");
         history.push(NavRecord({nav: nav, asOf: asOf, storedAt: block.timestamp}));
         emit NavPosted(nav, asOf, block.timestamp, msg.sender);
     }
