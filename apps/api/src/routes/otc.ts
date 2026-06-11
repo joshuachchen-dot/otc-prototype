@@ -219,10 +219,26 @@ export default async function (app: FastifyInstance) {
   app.post('/otc/settle', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const { id } = z.object({ id: z.number().int().nonnegative() }).parse(req.body);
+
+      // Re-validate KYC eligibility and sanctions status at settlement time.
+      // Up to MAX_TRADE_AGE (7 days) may have elapsed since propose(), during
+      // which either party's eligibility or sanctions status can change.
+      const [seller, buyer] = await otcTrade.read.getTrade([BigInt(id)]);
+
+      if (!await kycIsEligible(seller)) {
+        return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: seller address has not completed KYC' });
+      }
+      if (!await kycIsEligible(buyer)) {
+        return reply.code(403).send({ error: 'KYC_NOT_ELIGIBLE: buyer address has not completed KYC' });
+      }
+      await sanctionsCheck(seller);
+      await sanctionsCheck(buyer);
+
       const tx = await otcTrade.write.settle([BigInt(id)]);
       return { tx };
     } catch (err: any) {
       if (err.name === 'ZodError') return reply.code(400).send({ error: err.issues });
+      if (err instanceof SanctionsHit) return reply.code(403).send({ error: err.message });
 
       const reason: string =
         err.cause?.reason ??
