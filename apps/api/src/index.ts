@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -60,7 +60,7 @@ await app.register(otc);
 await app.register(sanctions);
 
 // ── Global error handler ──────────────────────────────────────────────────────
-app.setErrorHandler((err, _req, reply) => {
+app.setErrorHandler<FastifyError>((err, _req, reply) => {
   app.log.error(err);
   const statusCode = err.statusCode ?? 500;
   reply.code(statusCode).send({ error: err.message ?? 'Internal server error' });
