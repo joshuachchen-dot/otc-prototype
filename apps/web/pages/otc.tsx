@@ -6,12 +6,14 @@ const BUYER  = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
 
 const TRADE_AMOUNT = (500n * 10n ** 18n).toString();
 
-// navFloor is per-scenario so each can demonstrate a different live-data outcome.
+// navFloor/navCeiling are per-scenario so each can demonstrate a different
+// live-data outcome. navCeiling of "0" means "no ceiling".
 // Scenarios 1 & 2 use $1,000 — live ETH/USD (~$1,662) comfortably clears it.
 // Scenario 3 uses $2,000 — live ETH/USD is below it, showing NAV_BELOW_FLOOR.
 type ScenarioDef = {
   id: 1 | 2 | 3;
   navFloor: string;
+  navCeiling: string;
   title: string;
   description: string;
   sellCondition: string;
@@ -24,6 +26,7 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: 1,
     navFloor: "1000000000",
+    navCeiling: "0",
     title: "Scenario 1 — Successful Settlement",
     description:
       "Seller holds 1,000 OTCF (well above the 500 trade amount). " +
@@ -37,6 +40,7 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: 2,
     navFloor: "1000000000",
+    navCeiling: "0",
     title: "Scenario 2 — Sell-Side Fail (insufficient inventory)",
     description:
       "Seller holds only 100 OTCF, below the 500 required. " +
@@ -49,6 +53,7 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: 3,
     navFloor: "2000000000",
+    navCeiling: "0",
     title: "Scenario 3 — Buy-Side Fail (NAV below floor)",
     description:
       "Seller holds 1,000 OTCF (sufficient). Live on-chain NAV (~$1,662) is below the " +
@@ -60,7 +65,7 @@ const SCENARIOS: ScenarioDef[] = [
   },
 ];
 
-type TradeResult = { id: number; seller: string; buyer: string; amount: string; navFloor: string; status: string };
+type TradeResult = { id: number; seller: string; buyer: string; amount: string; navFloor: string; navCeiling: string; status: string };
 type StepLog     = { label: string; value: string; ok: boolean };
 
 function StatusBadge({ status }: { status: string }) {
@@ -99,6 +104,11 @@ function TradeCard({ trade }: { trade: TradeResult }) {
         <div><b>Buyer</b></div><div style={{ fontFamily: "monospace", fontSize: 11 }}>{trade.buyer}</div>
         <div><b>Amount</b></div><div>{(BigInt(trade.amount) / 10n ** 18n).toString()} OTCF</div>
         <div><b>NAV floor</b></div><div>${(Number(trade.navFloor) / 1e6).toLocaleString()}</div>
+        {trade.navCeiling !== "0" && (
+          <>
+            <div><b>NAV ceiling</b></div><div>${(Number(trade.navCeiling) / 1e6).toLocaleString()}</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -135,12 +145,12 @@ export default function OTCPage() {
       if (!setupRes.ok) throw new Error(setupData.error ?? "Setup failed");
       for (const step of setupData.steps as string[]) addLog(s.id, { label: "Setup", value: step, ok: true });
 
-      const signRes  = await apiFetch("/otc/sign-propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: s.navFloor }) });
+      const signRes  = await apiFetch("/otc/sign-propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: s.navFloor, navCeiling: s.navCeiling }) });
       const signData = await signRes.json();
       if (!signRes.ok) throw new Error(signData.error ?? "Seller consent signing failed");
       addLog(s.id, { label: "Seller signed consent (EIP-712)", value: `nonce=${signData.nonce}`, ok: true });
 
-      const proposeRes  = await apiFetch("/otc/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: s.navFloor, ...signData }) });
+      const proposeRes  = await apiFetch("/otc/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seller: SELLER, buyer: BUYER, amount: TRADE_AMOUNT, navFloor: s.navFloor, navCeiling: s.navCeiling, ...signData }) });
       const proposeData = await proposeRes.json();
       if (!proposeRes.ok) throw new Error(proposeData.error ?? "Propose failed");
       const tradeId: number = proposeData.id;

@@ -24,22 +24,24 @@ const SCENARIO_SELLER_PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412
 
 const PROPOSE_TYPES = {
   ProposeTrade: [
-    { name: 'seller',   type: 'address' },
-    { name: 'buyer',    type: 'address' },
-    { name: 'amount',   type: 'uint256' },
-    { name: 'navFloor', type: 'uint256' },
-    { name: 'nonce',    type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
+    { name: 'seller',     type: 'address' },
+    { name: 'buyer',      type: 'address' },
+    { name: 'amount',     type: 'uint256' },
+    { name: 'navFloor',   type: 'uint256' },
+    { name: 'navCeiling', type: 'uint256' },
+    { name: 'nonce',      type: 'uint256' },
+    { name: 'deadline',   type: 'uint256' },
   ],
 } as const;
 
-function formatTrade(raw: readonly [string, string, bigint, bigint, bigint, number]) {
-  const [seller, buyer, amount, navFloor, proposedAt, status] = raw;
+function formatTrade(raw: readonly [string, string, bigint, bigint, bigint, bigint, number]) {
+  const [seller, buyer, amount, navFloor, navCeiling, proposedAt, status] = raw;
   return {
     seller,
     buyer,
     amount:     amount.toString(),
     navFloor:   navFloor.toString(),
+    navCeiling: navCeiling.toString(),
     proposedAt: proposedAt.toString(),
     status:     STATUS_LABELS[status] ?? 'Unknown',
   };
@@ -92,10 +94,11 @@ export default async function (app: FastifyInstance) {
   app.post('/otc/sign-propose', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
-        seller:   addressSchema,
-        buyer:    addressSchema,
-        amount:   amountSchema,
-        navFloor: amountSchema,
+        seller:     addressSchema,
+        buyer:      addressSchema,
+        amount:     amountSchema,
+        navFloor:   amountSchema,
+        navCeiling: amountSchema.default('0'),
       }).parse(req.body);
 
       if (getAddress(body.seller) !== SCENARIO_SELLER_ADDRESS) {
@@ -119,10 +122,11 @@ export default async function (app: FastifyInstance) {
         types: PROPOSE_TYPES,
         primaryType: 'ProposeTrade',
         message: {
-          seller:   body.seller as `0x${string}`,
-          buyer:    body.buyer  as `0x${string}`,
-          amount:   BigInt(body.amount),
-          navFloor: BigInt(body.navFloor),
+          seller:     body.seller as `0x${string}`,
+          buyer:      body.buyer  as `0x${string}`,
+          amount:     BigInt(body.amount),
+          navFloor:   BigInt(body.navFloor),
+          navCeiling: BigInt(body.navCeiling),
           nonce,
           deadline,
         },
@@ -145,10 +149,11 @@ export default async function (app: FastifyInstance) {
   app.post('/otc/propose', { preHandler: requireApiKey }, async (req, reply) => {
     try {
       const body = z.object({
-        seller:   addressSchema,
-        buyer:    addressSchema,
-        amount:   amountSchema,
-        navFloor: amountSchema,
+        seller:     addressSchema,
+        buyer:      addressSchema,
+        amount:     amountSchema,
+        navFloor:   amountSchema,
+        navCeiling: amountSchema.default('0'),
         // EIP-712 seller consent fields
         nonce:    z.coerce.bigint(),
         deadline: z.coerce.bigint(),
@@ -176,6 +181,7 @@ export default async function (app: FastifyInstance) {
         body.buyer    as `0x${string}`,
         amt,
         BigInt(body.navFloor),
+        BigInt(body.navCeiling),
         body.nonce,
         body.deadline,
         body.v,
@@ -190,9 +196,9 @@ export default async function (app: FastifyInstance) {
       // broadcasting is a race — the tx may not be mined yet, returning a stale
       // count and therefore the wrong id.
       const receipt = await rpc.waitForTransactionReceipt({ hash: tx });
-      // keccak256("TradeProposed(uint256,address,address,uint256,uint256)")
+      // keccak256("TradeProposed(uint256,address,address,uint256,uint256,uint256)")
       const TRADE_PROPOSED_TOPIC =
-        '0x504de33a229e9c7bbf845206f79e83b35839b5a6bba894fc00074d5ad8c7708b';
+        '0x0ed07d42c3402a13b22dd06398d8beb62993b655353bb63ef403b90801d01925';
       const proposedLog = receipt.logs.find(l =>
         l.address.toLowerCase() === ENV.OTC_TRADE_ADDRESS.toLowerCase() &&
         l.topics[0] === TRADE_PROPOSED_TOPIC
@@ -283,7 +289,7 @@ export default async function (app: FastifyInstance) {
       const tradeCount = await otcTrade.read.tradeCount();
       for (let i = 0; i < Number(tradeCount); i++) {
         const raw = await otcTrade.read.getTrade([BigInt(i)]);
-        const isPending = raw[5] === 0;
+        const isPending = raw[6] === 0;
         const involvesSeller = raw[0].toLowerCase() === seller.toLowerCase();
         if (isPending && involvesSeller) {
           const cancelTx = await otcTrade.write.cancel([BigInt(i), 'superseded by new scenario run']);

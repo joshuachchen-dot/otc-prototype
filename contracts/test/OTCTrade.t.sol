@@ -18,9 +18,10 @@ contract OTCTradeTest is Test {
     uint256 sellerKey = 0xA11CE;
     address seller;
 
-    uint256 constant AMOUNT    = 500e18;
-    uint256 constant NAV_FLOOR = 2_000_000_000;
-    uint256 constant NAV_GOOD  = 3_000_000_000;
+    uint256 constant AMOUNT      = 500e18;
+    uint256 constant NAV_FLOOR   = 2_000_000_000;
+    uint256 constant NAV_GOOD    = 3_000_000_000;
+    uint256 constant NAV_CEILING = 4_000_000_000;
 
     function setUp() public {
         seller = vm.addr(sellerKey);
@@ -48,6 +49,7 @@ contract OTCTradeTest is Test {
         address _buyer,
         uint256 amount,
         uint256 navFloor,
+        uint256 navCeiling,
         uint256 nonce,
         uint256 deadline,
         uint256 privateKey
@@ -58,6 +60,7 @@ contract OTCTradeTest is Test {
             _buyer,
             amount,
             navFloor,
+            navCeiling,
             nonce,
             deadline
         ));
@@ -69,11 +72,16 @@ contract OTCTradeTest is Test {
         (v, r, s) = vm.sign(privateKey, digest);
     }
 
+    /// Propose with no NAV ceiling (navCeiling = 0).
     function _propose(uint256 navFloor) internal returns (uint256 id) {
+        return _propose(navFloor, 0);
+    }
+
+    function _propose(uint256 navFloor, uint256 navCeiling) internal returns (uint256 id) {
         uint256 nonce    = otc.nonces(seller);
         uint256 deadline = block.timestamp + 1 hours;
-        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, navFloor, nonce, deadline, sellerKey);
-        id = otc.propose(seller, buyer, AMOUNT, navFloor, nonce, deadline, v, r, s);
+        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, navFloor, navCeiling, nonce, deadline, sellerKey);
+        id = otc.propose(seller, buyer, AMOUNT, navFloor, navCeiling, nonce, deadline, v, r, s);
     }
 
     // ── Happy path ───────────────────────────────────────────────────────────
@@ -94,19 +102,19 @@ contract OTCTradeTest is Test {
         uint256 wrongKey = 0xBAD;
         uint256 nonce    = otc.nonces(seller);
         uint256 deadline = block.timestamp + 1 hours;
-        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, nonce, deadline, wrongKey);
+        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, 0, nonce, deadline, wrongKey);
 
         vm.expectRevert("INVALID_SELLER_SIGNATURE");
-        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, nonce, deadline, v, r, s);
+        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, 0, nonce, deadline, v, r, s);
     }
 
     function testPropose_RevertsOnExpiredDeadline() public {
         uint256 nonce    = otc.nonces(seller);
         uint256 deadline = block.timestamp - 1; // already expired
-        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, nonce, deadline, sellerKey);
+        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, 0, nonce, deadline, sellerKey);
 
         vm.expectRevert("SIGNATURE_EXPIRED");
-        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, nonce, deadline, v, r, s);
+        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, 0, nonce, deadline, v, r, s);
     }
 
     function testPropose_RevertsOnReplayedNonce() public {
@@ -116,10 +124,10 @@ contract OTCTradeTest is Test {
         // Replay the same nonce — should fail
         uint256 nonce    = 0; // stale nonce
         uint256 deadline = block.timestamp + 1 hours;
-        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, nonce, deadline, sellerKey);
+        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, 0, nonce, deadline, sellerKey);
 
         vm.expectRevert("INVALID_NONCE");
-        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, nonce, deadline, v, r, s);
+        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, 0, nonce, deadline, v, r, s);
     }
 
     function testPropose_NonceIncrementsAfterPropose() public {
@@ -171,6 +179,47 @@ contract OTCTradeTest is Test {
         uint256 id = _propose(NAV_FLOOR);
         vm.expectRevert("NAV_BELOW_FLOOR");
         otc.settle(id);
+    }
+
+    // ── NAV ceiling guard ────────────────────────────────────────────────────
+
+    function testSettle_RevertsWhenNAVAboveCeiling() public {
+        // NAV_GOOD (3,000,000,000) is posted in setUp(); cap below it.
+        uint256 id = _propose(NAV_FLOOR, NAV_GOOD - 1);
+        vm.expectRevert("NAV_ABOVE_CEILING");
+        otc.settle(id);
+    }
+
+    function testSettle_SucceedsWhenNAVEqualsCeiling() public {
+        // NAV == navCeiling is the boundary and must be allowed (<=, not <).
+        uint256 id = _propose(NAV_FLOOR, NAV_GOOD);
+        otc.settle(id);
+        assertEq(uint8(otc.getTrade(id).status), uint8(OTCTrade.Status.Settled));
+    }
+
+    function testSettle_SucceedsAboveNAVGoodWhenCeilingIsZero() public {
+        // navCeiling == 0 means "no ceiling" — any NAV >= navFloor settles.
+        nav.postNAV(NAV_CEILING + 1, block.timestamp);
+        uint256 id = _propose(NAV_FLOOR, 0);
+        otc.settle(id);
+        assertEq(uint8(otc.getTrade(id).status), uint8(OTCTrade.Status.Settled));
+    }
+
+    function testPropose_RevertsWhenCeilingBelowFloor() public {
+        uint256 nonce      = otc.nonces(seller);
+        uint256 deadline   = block.timestamp + 1 hours;
+        uint256 navCeiling = NAV_FLOOR - 1;
+        (uint8 v, bytes32 r, bytes32 s) = _sign(seller, buyer, AMOUNT, NAV_FLOOR, navCeiling, nonce, deadline, sellerKey);
+
+        vm.expectRevert("CEILING_BELOW_FLOOR");
+        otc.propose(seller, buyer, AMOUNT, NAV_FLOOR, navCeiling, nonce, deadline, v, r, s);
+    }
+
+    function testPropose_AllowsZeroCeilingEvenBelowFloor() public {
+        // navCeiling == 0 is the "no ceiling" sentinel and bypasses the
+        // navCeiling >= navFloor sanity check entirely.
+        uint256 id = _propose(NAV_FLOOR, 0);
+        assertEq(otc.getTrade(id).navCeiling, 0);
     }
 
     // ── Seller balance guard ─────────────────────────────────────────────────

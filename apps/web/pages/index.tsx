@@ -10,7 +10,7 @@ import OTCFeed, { OTCTrade } from "@/components/OTCFeed";
 import { apiFetch } from "@/lib/api";
 
 type LiveNav   = { nav: string; asOf: string; storedAt: string };
-type LiveTrade = { id: number; seller: string; buyer: string; amount: string; navFloor: string; status: string };
+type LiveTrade = { id: number; seller: string; buyer: string; amount: string; navFloor: string; navCeiling: string; status: string };
 
 // NAV is stored on-chain scaled by 1e6 (e.g. "1667980000" = $1,667.98)
 function formatUsdFromMicro(raw: string): string {

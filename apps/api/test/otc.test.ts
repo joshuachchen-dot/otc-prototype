@@ -63,7 +63,7 @@ jest.unstable_mockModule('../src/db/aml', () => ({
 }));
 
 const tradeRaw = (seller: string, buyer: string) =>
-  [seller, buyer, 500n * 10n ** 18n, 2_000_000_000n, BigInt(Math.floor(Date.now() / 1000)), 0] as const;
+  [seller, buyer, 500n * 10n ** 18n, 2_000_000_000n, 0n, BigInt(Math.floor(Date.now() / 1000)), 0] as const;
 
 let app: FastifyInstance;
 
